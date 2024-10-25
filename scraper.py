@@ -198,7 +198,6 @@ def extract_next_links(url, resp):
                 # Check if the URL has a valid scheme
                 parsed_href = urlparse(absolute_url)
                 if parsed_href.scheme in {'http', 'https'}:
-                    print(absolute_url) # Debug purposes
                     links.append(absolute_url)
 
     except Exception as e:
