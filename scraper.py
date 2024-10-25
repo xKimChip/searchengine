@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse, urljoin, urldefrag
+from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
 from bs4 import BeautifulSoup
 from collections import defaultdict
 
@@ -100,9 +100,10 @@ def is_valid(url):
         if parsed.scheme not in {"http", "https"}:
             return False
 
-        # Extract the netloc and path
+        # Extract components
         netloc = parsed.netloc.lower()
         path = parsed.path.lower()
+        query = parsed.query.lower()
 
         # Check if the netloc is one of the allowed domains
         if any(domain in netloc for domain in allowed_domains):
@@ -110,6 +111,7 @@ def is_valid(url):
             if "today.uci.edu" in netloc:
                 if not path.startswith(today_uci_edu_path):
                     return False
+
             # Exclude URLs with disallowed file extensions
             if re.match(
                 r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -121,15 +123,45 @@ def is_valid(url):
                 r"|thmx|mso|arff|rtf|jar|csv"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path):
                 return False
-            # URL is valid
+
+            # Exclude URLs with specific query parameters
+            disallowed_params = {'do', 'tab_details', 'tab_files', 'image', 'ns'}
+            query_params = set(parse_qs(query).keys())
+            if disallowed_params.intersection(query_params):
+                return False
+
+            # Limit the number of query parameters
+            if len(query_params) > 2:
+                return False
+
+            # Exclude URLs with repetitive patterns
+            if has_repetitive_pattern(url):
+                return False
+
             return True
         else:
-            # Netloc is not in allowed domains
             return False
 
     except TypeError:
         print("TypeError for ", url)
         return False
+
+def has_repetitive_pattern(url):
+    parsed = urlparse(url)
+    path = parsed.path.strip('/')
+    segments = path.split('/')
+
+    # Check for repetition in path segments
+    if len(segments) != len(set(segments)):
+        return True
+
+    # Check for repetitive query parameters
+    query = parsed.query
+    params = parse_qs(query)
+    if len(params) != len(set(params)):
+        return True
+
+    return False
 
 # Define the function to extract next links from the page
 def extract_next_links(url, resp):
