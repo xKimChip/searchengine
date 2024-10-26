@@ -111,6 +111,11 @@ def is_valid(url):
             if "today.uci.edu" in netloc:
                 if not path.startswith(today_uci_edu_path):
                     return False
+            
+            # Exclude disallowed domains
+            disallowed_domains = {'gitlab.ics.uci.edu', 'swiki.ics.uci.edu'}
+            if netloc in disallowed_domains:
+                return False
 
             # Exclude URLs with disallowed file extensions
             if re.match(
@@ -122,6 +127,10 @@ def is_valid(url):
                 r"|epub|dll|cnf|tgz|sha1"
                 r"|thmx|mso|arff|rtf|jar|csv"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path):
+                return False
+            
+            # Exclude URLs with excessive query parameters
+            if len(parse_qs(query)) > 2:
                 return False
 
             # Exclude URLs with specific query parameters
