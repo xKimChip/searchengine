@@ -113,7 +113,7 @@ def is_valid(url):
                     return False
             
             # Exclude disallowed domains
-            disallowed_domains = {'gitlab.ics.uci.edu', 'swiki.ics.uci.edu'}
+            disallowed_domains = {'gitlab.ics.uci.edu', 'swiki.ics.uci.edu', 'wiki.ics.uci.edu'}
             if netloc in disallowed_domains:
                 return False
 
