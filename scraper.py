@@ -1,7 +1,11 @@
 import re
+from typing import Any, Callable, TypeAlias
 from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
 from bs4 import BeautifulSoup
 from collections import defaultdict
+import random
+from collections import deque
+
 
 # Global data structures
 unique_urls = set()
@@ -24,7 +28,13 @@ allowed_domains = [
 
 today_uci_edu_path = "/department/information_computer_sciences"
 
+Token: TypeAlias = str
+HASH: TypeAlias = int
+MAX_ALLOWED_SIMILARITY = .65
+
 # Define the tokenizer function
+
+
 def tokenize(text_content: str):
     tokens = []
     token_chars = []
@@ -45,7 +55,8 @@ def tokenize(text_content: str):
                     token = ''.join(token_chars)
                     tokens.append(token)
                     token_chars = []
-                skipping_long_token = False  # Reset the skipping flag after non-alphanumeric character
+                # Reset the skipping flag after non-alphanumeric character
+                skipping_long_token = False
 
         # In case the text ends while we're in the middle of a token
         if token_chars and not skipping_long_token:
@@ -58,6 +69,8 @@ def tokenize(text_content: str):
     return tokens
 
 # Define the function to compute word frequencies
+
+
 def compute_word_frequencies(tokens):
     global word_frequencies
 
@@ -65,6 +78,8 @@ def compute_word_frequencies(tokens):
         word_frequencies[token] += 1
 
 # Define the function to filter out stop words
+
+
 def filter_stop_words(tokens):
     # Define a list of English stop words
     stop_words = set([
@@ -89,6 +104,8 @@ def filter_stop_words(tokens):
     return filtered_tokens
 
 # Define the is_valid function to filter URLs
+
+
 def is_valid(url):
     try:
         # Remove fragment, if any
@@ -111,9 +128,10 @@ def is_valid(url):
             if "today.uci.edu" in netloc:
                 if not path.startswith(today_uci_edu_path):
                     return False
-            
+
             # Exclude disallowed domains
-            disallowed_domains = {'gitlab.ics.uci.edu', 'swiki.ics.uci.edu', 'wiki.ics.uci.edu'}
+            disallowed_domains = {'gitlab.ics.uci.edu',
+                                  'swiki.ics.uci.edu', 'wiki.ics.uci.edu'}
             if netloc in disallowed_domains:
                 return False
 
@@ -126,15 +144,16 @@ def is_valid(url):
                 r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
                 r"|epub|dll|cnf|tgz|sha1"
                 r"|thmx|mso|arff|rtf|jar|csv"
-                r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path):
+                    r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path):
                 return False
-            
+
             # Exclude URLs with excessive query parameters
             if len(parse_qs(query)) > 2:
                 return False
 
             # Exclude URLs with specific query parameters
-            disallowed_params = {'do', 'tab_details', 'tab_files', 'image', 'ns'}
+            disallowed_params = {'do', 'tab_details',
+                                 'tab_files', 'image', 'ns'}
             query_params = set(parse_qs(query).keys())
             if disallowed_params.intersection(query_params):
                 return False
@@ -155,6 +174,7 @@ def is_valid(url):
         print("TypeError for ", url)
         return False
 
+
 def has_repetitive_pattern(url):
     parsed = urlparse(url)
     path = parsed.path.strip('/')
@@ -173,6 +193,8 @@ def has_repetitive_pattern(url):
     return False
 
 # Define the function to extract next links from the page
+
+
 def extract_next_links(url, resp):
     links = []
 
@@ -213,8 +235,98 @@ def extract_next_links(url, resp):
         print(f"Error parsing {url}: {e}")
 
     return links
-
 # Define the main scraper function
+
+
+DEFAULT_N_GRAM_SIZE = 3
+
+
+def n_gram(token_list: list[Token], n_grams: int = DEFAULT_N_GRAM_SIZE) -> list[tuple[Token, Token, Token]]:
+    # determine what percentage of the document to select
+    # set the value between 0 and 1
+    AMOUNT_OF_LIST_TO_SELECT: float = 1
+
+    tuple_list: list[tuple] = list()
+    for i in range(0, len(token_list), n_grams):
+        # curr_tuple: tuple[Token, Token, Token] = tuple()
+        curr_list_of_elements: list[Token] = list()
+        if (random.random() <= AMOUNT_OF_LIST_TO_SELECT):
+            for j in range(i, min(i + n_grams, len(token_list))):
+                curr_list_of_elements.append(token_list[j])
+
+            resultant_n_tuple: tuple[Token, Token,
+                                     Token] = tuple(curr_list_of_elements)
+            print(f'Appending the tuple : {resultant_n_tuple}')
+            tuple_list.append(resultant_n_tuple)
+
+    return set(tuple_list)
+
+
+def create_list_of_n_gram_hashes(tuple_list: list[tuple[Token]]) -> list[HASH]:
+    resultant_hash_list: list[HASH] = list()
+    for token_tuple in tuple_list:
+        resultant_hash_list.append(token_tuple)
+
+    return resultant_hash_list
+
+
+def make_set_of_n_gram_hashes(tuple_list: list[tuple[Token]]) -> list[HASH]:
+    set(create_list_of_n_gram_hashes(tuple_list=tuple_list))
+
+
+def get_similarity_score(n_gram_hash1: set[HASH], n_gram_hash2: set[HASH]) -> float:
+    # returns a score between 0 and 1
+    intersection_length: int = len(n_gram_hash1.intersection(n_gram_hash2))
+    union_length: int = len(n_gram_hash1.union(n_gram_hash2))
+    return intersection_length / union_length
+
+
+N_GRAM_HASHED_LIST: deque[set[HASH]] = deque()
+N_GRAM_HASHED_LIST_MAX_SIZE = 100
+
+
+def read_n_gram_hash_list(operation: Callable[[deque[set[HASH]]], Any], *args) -> Any:
+    # Access the global variable
+    # lock
+    global n_gram_hash_list
+    # Perform the operation on the global data structure
+    result: Any = operation(n_gram_hash_list, *args)
+    # unlock
+    return result
+
+
+def add_to_n_gram_hashed_list(hash_to_add: set[HASH]) -> bool:
+    if type(hash_to_add) != set():
+        hash_to_add = set(hash_to_add)
+
+    # lock
+    if len(N_GRAM_HASHED_LIST) == N_GRAM_HASHED_LIST_MAX_SIZE:
+        N_GRAM_HASHED_LIST.popleft()
+
+    N_GRAM_HASHED_LIST.append(hash_to_add)
+
+    # unlock
+    return True
+
+
+def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_gram_hash1: set[HASH], max_allowed_score: float = MAX_ALLOWED_SIMILARITY) -> float:
+    for curr_n_gram_hash in n_grams_list:
+        if get_similarity_score(n_gram_hash1=n_gram_hash1, n_gram_hash2=curr_n_gram_hash) > max_allowed_score:
+            return False
+
+    return True
+
+
+def go_thru_n_gram_phase(token_list: list[Token]) -> bool:
+    tuple_list: list[tuple[Token, Token, Token]
+                     ] = n_gram(token_list=token_list)
+    hashed_tuple: set[HASH] = make_set_of_n_gram_hashes(tuple_list=tuple_list)
+    should_read = read_n_gram_hash_list(
+        should_evaluate_based_on_similarity_score, hashed_tuple)
+
+    return should_read
+
+
 def scraper(url, resp):
     global unique_urls, longest_page, subdomains
 
@@ -232,15 +344,12 @@ def scraper(url, resp):
         subdomain = parsed_url.netloc.lower()
         subdomains[subdomain] += 1
 
-    # Extract next links
-    links = extract_next_links(url, resp)
-
-    # Filter links using is_valid
-    valid_links = [link for link in links if is_valid(link)]
+    should_go_thru_website: bool = True
 
     # Process the page content if the response is valid
     if resp.status == 200 and resp.raw_response is not None:
-        content_type = resp.raw_response.headers.get('Content-Type', '').lower()
+        content_type = resp.raw_response.headers.get(
+            'Content-Type', '').lower()
         if content_type and content_type.startswith('text/html'):
             try:
                 # Parse the HTML content
@@ -255,17 +364,27 @@ def scraper(url, resp):
                 # Remove stop words from tokens
                 filtered_tokens = filter_stop_words(tokens)
 
-                # Compute word frequencies
-                compute_word_frequencies(filtered_tokens)
+                # should_go_thru_website = go_thru_n_gram_phase(filtered_tokens)
 
-                # Update longest page
-                word_count = len(filtered_tokens)
-                if word_count > longest_page['word_count']:
-                    longest_page['word_count'] = word_count
-                    longest_page['url'] = url
+                if should_go_thru_website:
+                    # Compute word frequencies
+                    compute_word_frequencies(filtered_tokens)
+
+                    # Update longest page
+                    word_count = len(filtered_tokens)
+                    if word_count > longest_page['word_count']:
+                        longest_page['word_count'] = word_count
+                        longest_page['url'] = url
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
+    valid_links = list()
+    if should_go_thru_website:
+        # Extract next links
+        links = extract_next_links(url, resp)
+
+        # Filter links using is_valid
+        valid_links = [link for link in links if is_valid(link)]
 
     return valid_links
 
@@ -274,18 +393,19 @@ def scraper(url, resp):
 if __name__ == "__main__":
     # Print total unique pages
     print(f"Total unique pages: {len(unique_urls)}")
-    
+
     # Print the longest page info
     print(f"Longest page URL: {longest_page['url']}")
     print(f"Longest page word count: {longest_page['word_count']}")
-    
+
     # Print top 50 words
-    sorted_words = sorted(word_frequencies.items(), key=lambda item: item[1], reverse=True)
+    sorted_words = sorted(word_frequencies.items(),
+                          key=lambda item: item[1], reverse=True)
     top_50_words = sorted_words[:50]
     print("Top 50 words:")
     for word, freq in top_50_words:
         print(f"{word}: {freq}")
-    
+
     # Print subdomains
     sorted_subdomains = sorted(subdomains.items())
     print("Subdomains:")
