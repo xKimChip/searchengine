@@ -270,8 +270,7 @@ def n_gram(token_list: list[Token], n_grams: int=DEFAULT_N_GRAM_SIZE) -> list[To
             for j in range(i, min(i + n_grams, len(token_list))):
                 curr_list_of_elements.append(token_list[j])
 
-            resultant_n_tuple: tuple[Token, Token,
-                                     Token]=tuple(curr_list_of_elements)
+            resultant_n_tuple: [Token_Tuple]=tuple(curr_list_of_elements)
             print(f'Appending the tuple : {resultant_n_tuple}')
             tuple_list.append(resultant_n_tuple)
 
@@ -334,8 +333,7 @@ def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_g
 
 
 def go_thru_n_gram_phase(token_list: list[Token]) -> bool:
-    tuple_list: list[tuple[Token, Token, Token]
-                     ]=n_gram(token_list=token_list)
+    tuple_list: list[Token_Tuple]=n_gram(token_list=token_list)
     hashed_tuple: set[HASH]=make_set_of_n_gram_hashes(tuple_list=tuple_list)
     should_read=read_n_gram_hash_list(
         should_evaluate_based_on_similarity_score, hashed_tuple)
