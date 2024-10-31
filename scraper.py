@@ -148,10 +148,10 @@ def is_valid(url):
             if netloc in disallowed_domains:
                 return False
 
-            # Exclude URLs with disallowed file extensions
-            if re.search(r".*(search|login|logout|api|admin|raw|static|calendar|event).*",parsed.path.lower()) or
+            # Exclude URLs with disallowed file extensions           
+            if  re.search(r".*(admin|api|calendar|event|login|logout|raw|search|static).*",parsed.path.lower()) or
                 re.search(r".*(page|p)/?d+", parsed.path.lower()) or
-                re.search(r".*(sessionid|sid|session)=[\w\d]{32}.*",parsed.query.lower() or
+                re.search(r".*(session|sid|sessionid)=[\w\d]{32}.*",parsed.query.lower()) or
                 re.match(
                 r".*\.(css|js|bmp|gif|jpe?g|ico"
                 r"|png|tiff?|mid|mp2|mp3|mp4"
