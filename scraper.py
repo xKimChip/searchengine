@@ -115,9 +115,9 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with disallowed file extensions
-            if (re.search(r".*(search|login|logout|api|admin|raw|static|calendar|event).*", path) or
-                re.search(r".*(page|p)/?d+", path) or
-                re.search(r".*(sessionid|sid|session)=[\w\d]{32}.*", query) or
+            if  (re.search(r".*(search|login|logout|api|admin|raw|static|calendar|event).*",parsed.path.lower()) or
+                re.search(r".*(page|p)/?d+", parsed.path.lower()) or
+                re.search(r".*(sessionid|sid|session)=[\w\d]{32}.*",parsed.query.lower()) or
                 re.match(
                 r".*\.(css|js|bmp|gif|jpe?g|ico"
                 r"|png|tiff?|mid|mp2|mp3|mp4"
