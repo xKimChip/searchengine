@@ -5,10 +5,14 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 import random
 from collections import deque
+from DomainTrie import DomainTrie
 
 
 # Global data structures
 unique_urls = set()
+unique_urls_trie: DomainTrie = DomainTrie()
+
+
 longest_page = {
     'url': '',
     'word_count': 0
@@ -30,8 +34,17 @@ today_uci_edu_path = "/department/information_computer_sciences"
 
 Token: TypeAlias = str
 HASH: TypeAlias = int
+Token_Tuple: TypeAlias = tuple[Token, Token, Token]
+url_string: TypeAlias = str
 MAX_ALLOWED_SIMILARITY = .65
 
+
+def unique_urls_trie_insert(domain_to_insert: url_string) -> bool:
+    # lock
+    # return false if cannot be unlocked fast enough
+    unique_urls_trie.insert(domain_to_insert)
+    # unlock
+    return True
 # Define the tokenizer function
 
 
