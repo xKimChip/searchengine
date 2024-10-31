@@ -10,6 +10,8 @@ allowed_domains = [
     "today.uci.edu"
 ]
 
+URL_SIMILARITY_THRESHOLD: float = .8
+
 unique_urls_trie: DomainTrie = DomainTrie()
 unique_urls = set()
 longest_page = {
