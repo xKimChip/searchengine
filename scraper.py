@@ -1,5 +1,5 @@
 import re
-from typing import Any, Callable, TypeAlias
+# from typing import Any, Callable, TypeAlias
 from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
 from bs4 import BeautifulSoup
 import random
@@ -8,7 +8,7 @@ import globals
 from globals import (Token, Token_Tuple, HASH, url_string)
 import ngrams
 from tokenizer import tokenize
-
+import ngrams 
 
 # Define the function to compute word frequencies
 def compute_word_frequencies(tokens):
@@ -49,7 +49,7 @@ def filter_stop_words(tokens):
 def is_valid(url):
     try:
         # Remove fragment, if any
-        url, _ = urldefrag(url)
+        url = urldefrag(url).url
 
         parsed = urlparse(url)
 
@@ -76,9 +76,9 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with disallowed file extensions
-            if  (re.search(r".*(search|login|logout|api|admin|raw|static|calendar|event).*",parsed.path.lower()) or
-                re.search(r".*(page|p)/?d+", parsed.path.lower()) or
-                re.search(r".*(sessionid|sid|session)=[\w\d]{32}.*",parsed.query.lower()) or
+            if  (re.search(r"/(search|login|logout|api|admin|raw|static|calendar|event)/", path) or
+                re.search(r"/(page|p)/?\d+", path) or
+                re.search(r"(sessionid|sid|session)=[\w\d]{32}", query) or
                 re.match(
                 r".*\.(css|js|bmp|gif|jpe?g|ico"
                 r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -91,9 +91,9 @@ def is_valid(url):
                 return False
             
             # Exclude URLs with dates
-            if (re.search(r"(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4})") or
-                re.search(r"?:\d{4}[-/]\d{1,2}[-/]\d{1,2})")    or
-                re.search(r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})")
+            if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
+                re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path)    or
+                re.search(r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
                 ):
                 return False
 
@@ -102,8 +102,7 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with specific query parameters
-            disallowed_params = {'do', 'tab_details',
-                                 'tab_files', 'image', 'ns'}
+            disallowed_params = {'do', 'tab_details', 'tab_files', 'image', 'ns'}
             query_params = set(parse_qs(query).keys())
             if disallowed_params.intersection(query_params):
                 return False
@@ -225,7 +224,7 @@ def scraper(url, resp):
                 # Remove stop words from tokens
                 filtered_tokens = filter_stop_words(tokens)
 
-                # should_go_thru_website = ngrams.go_thru_n_gram_phase( filtered_tokens)
+                #should_go_thru_website = ngrams.go_thru_n_gram_phase( filtered_tokens)
 
                 if should_go_thru_website:
                     # Compute word frequencies
@@ -240,12 +239,19 @@ def scraper(url, resp):
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
     valid_links = list()
+    
     if should_go_thru_website:
+        
         # Extract next links
         links = extract_next_links(url, resp)
 
         # Filter links using is_valid
         valid_links = [link for link in links if is_valid(link)]
+    
+    
+    
+
+    
 
     return valid_links
 

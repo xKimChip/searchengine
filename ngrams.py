@@ -26,7 +26,7 @@ def n_gram(token_list: list[Token], n_grams: int = DEFAULT_N_GRAM_SIZE) -> list[
                 curr_list_of_elements.append(token_list[j])
 
             resultant_n_tuple: Token_Tuple = tuple(curr_list_of_elements)
-            print(f'Appending the tuple : {resultant_n_tuple}')
+            # print(f'Appending the tuple : {resultant_n_tuple}')
             tuple_list.append(resultant_n_tuple)
 
     return tuple_list
