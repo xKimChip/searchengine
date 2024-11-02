@@ -3,11 +3,12 @@ from operator import __eq__
 import sys
 from typing import Any, Callable, TypeAlias
 from globals import url_string
-import globals
 from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
 from test_suite import test_function
 
 parsed_url_dict: TypeAlias = dict
+
+URL_SIMILARITY_THRESHOLD: float = .85
 
 
 def parse_url(url: url_string) -> parsed_url_dict:
@@ -157,7 +158,7 @@ def get_link_similarity(url1: url_string, url2: url_string) -> float:
     return get_path_similarity_score(path1=parsed_url1['path'], path2=parsed_url2['path'])
 
 
-def should_evaluate_url(url1: url_string, url2: url_string, threshold: float = globals.URL_SIMILARITY_THRESHOLD):
+def should_evaluate_url(url1: url_string, url2: url_string, threshold: float = URL_SIMILARITY_THRESHOLD):
     return get_link_similarity(url1=url1, url2=url2) < threshold
 
 

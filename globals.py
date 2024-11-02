@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 from typing import Any, Callable, TypeAlias
 from DomainTrie import DomainTrie
+from threading import Lock
 
 allowed_domains = [
     "ics.uci.edu",
