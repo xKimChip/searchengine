@@ -17,7 +17,7 @@ def n_gram(token_list: list[Token], n_grams: int = DEFAULT_N_GRAM_SIZE) -> list[
     # set the value between 0 and 1
     AMOUNT_OF_LIST_TO_SELECT: float = 1
 
-    tuple_list: list[tuple] = list()
+    tuple_list: list[Token_Tuple] = list()
     for i in range(0, len(token_list), n_grams):
         # curr_tuple: tuple[Token, Token, Token] = tuple()
         curr_list_of_elements: list[Token] = list()
@@ -29,10 +29,10 @@ def n_gram(token_list: list[Token], n_grams: int = DEFAULT_N_GRAM_SIZE) -> list[
             print(f'Appending the tuple : {resultant_n_tuple}')
             tuple_list.append(resultant_n_tuple)
 
-    return set(tuple_list)
+    return tuple_list
 
 
-def create_list_of_n_gram_hashes(tuple_list: list[tuple[Token]]) -> list[HASH]:
+def create_list_of_n_gram_hashes(tuple_list: list[Token_Tuple]) -> list[HASH]:
     resultant_hash_list: list[HASH] = list()
     for token_tuple in tuple_list:
         resultant_hash_list.append(hash(token_tuple))
@@ -40,8 +40,8 @@ def create_list_of_n_gram_hashes(tuple_list: list[tuple[Token]]) -> list[HASH]:
     return resultant_hash_list
 
 
-def make_set_of_n_gram_hashes(tuple_list: list[tuple[Token]]) -> list[HASH]:
-    set(create_list_of_n_gram_hashes(tuple_list=tuple_list))
+def make_set_of_n_gram_hashes(tuple_list: list[Token_Tuple]) -> set[HASH]:
+    return set(create_list_of_n_gram_hashes(tuple_list=tuple_list))
 
 
 def get_similarity_score(n_gram_hash1: set[HASH], n_gram_hash2: set[HASH]) -> float:
@@ -51,7 +51,7 @@ def get_similarity_score(n_gram_hash1: set[HASH], n_gram_hash2: set[HASH]) -> fl
     return intersection_length / union_length
 
 
-def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_gram_hash1: set[HASH], max_allowed_score: float = MAX_ALLOWED_SIMILARITY) -> float:
+def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_gram_hash1: set[HASH], max_allowed_score: float = MAX_ALLOWED_SIMILARITY) -> bool:
     for curr_n_gram_hash in n_grams_list:
         if get_similarity_score(n_gram_hash1=n_gram_hash1, n_gram_hash2=curr_n_gram_hash) > max_allowed_score:
             return False
@@ -62,7 +62,7 @@ def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_g
 def go_thru_n_gram_phase(token_list: list[Token]) -> bool:
     tuple_list: list[Token_Tuple] = n_gram(token_list=token_list)
     hashed_tuple: set[HASH] = make_set_of_n_gram_hashes(tuple_list=tuple_list)
-    should_read = globals.read_n_gram_hash_list(
+    should_read = read_n_gram_hash_list(
         should_evaluate_based_on_similarity_score, hashed_tuple)
 
     return should_read
@@ -90,3 +90,5 @@ def add_to_n_gram_hashed_list(hash_to_add: set[HASH]) -> bool:
 
     # unlock
     return True
+
+
