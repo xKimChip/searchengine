@@ -50,17 +50,18 @@ class DomainTrie:
         return repr(self.root)
 
 
-trie = DomainTrie()
-trie.insert("https://chatgpt.com/c/672307c3-53d4-8002-af43-2031ffe19897")
-trie.insert("www.example.com")
-trie.insert("mail.example.com")
-trie.insert("support.example.org")
+if __name__ == "__main__":
+    trie = DomainTrie()
+    trie.insert("https://chatgpt.com/c/672307c3-53d4-8002-af43-2031ffe19897")
+    trie.insert("www.example.com")
+    trie.insert("mail.example.com")
+    trie.insert("support.example.org")
 
-print(trie.search("www.example.com"))        # True
-# False (not inserted as full domain)
-print(trie.search("example.com"))
-print(trie.starts_with("example.com"))       # True
-print(trie.starts_with("support.example"))   # False
-print(trie.search("support.example.org"))
+    print(trie.search("www.example.com"))        # True
+    # False (not inserted as full domain)
+    print(trie.search("example.com"))
+    print(trie.starts_with("example.com"))       # True
+    print(trie.starts_with("support.example"))   # False
+    print(trie.search("support.example.org"))
 
-print(f'{trie}')
+    print(f'{trie}')

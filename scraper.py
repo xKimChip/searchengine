@@ -6,59 +6,18 @@ import random
 from collections import deque
 import globals
 from globals import (Token, Token_Tuple, HASH, url_string)
+from tokenizer import tokenize
 
 
-# Global data structures
-
-
-# Define allowed domains and paths
-
-
-def tokenize(text_content: str):
-    tokens = []
-    token_chars = []
-    skipping_long_token = False  # Flag to indicate if we are skipping a long token
-
-    try:
-        for char in text_content:
-            # Only consider ASCII alphanumeric characters.
-            if char.isascii() and char.isalnum():
-                if not skipping_long_token:
-                    token_chars.append(char.lower())
-                    if len(token_chars) > globals.MAX_TOKEN_LENGTH:
-                        # Token is too long, skip it
-                        token_chars = []
-                        skipping_long_token = True  # Start skipping the rest of this token
-            else:
-                if token_chars:
-                    token = ''.join(token_chars)
-                    tokens.append(token)
-                    token_chars = []
-                # Reset the skipping flag after non-alphanumeric character
-                skipping_long_token = False
-
-        # In case the text ends while we're in the middle of a token
-        if token_chars and not skipping_long_token:
-            token = ''.join(token_chars)
-            tokens.append(token)
-
-    except Exception as e:
-        print(f"Unexpected error occurred during tokenization: {e}")
-
-    return tokens
 
 # Define the function to compute word frequencies
-
-
 def compute_word_frequencies(tokens):
     global word_frequencies
 
     for token in tokens:
-        word_frequencies[token] += 1
+        globals.word_frequencies[token] += 1
 
 # Define the function to filter out stop words
-
-
 def filter_stop_words(tokens):
     # Define a list of English stop words
     stop_words = set([
@@ -83,8 +42,6 @@ def filter_stop_words(tokens):
     return filtered_tokens
 
 # Define the is_valid function to filter URLs
-
-
 def is_valid(url):
     try:
         # Remove fragment, if any
@@ -283,15 +240,15 @@ def scraper(url, resp):
     url, _ = urldefrag(url)
 
     # Check if the URL is unique
-    if url in unique_urls:
+    if url in globals.unique_urls:
         return []
-    unique_urls.add(url)
+    globals.unique_urls.add(url)
 
     # Update subdomains count
     parsed_url = urlparse(url)
     if "uci.edu" in parsed_url.netloc:
         subdomain = parsed_url.netloc.lower()
-        subdomains[subdomain] += 1
+        globals.subdomains[subdomain] += 1
 
     should_go_thru_website: bool = True
 
@@ -321,9 +278,9 @@ def scraper(url, resp):
 
                     # Update longest page
                     word_count = len(filtered_tokens)
-                    if word_count > longest_page['word_count']:
-                        longest_page['word_count'] = word_count
-                        longest_page['url'] = url
+                    if word_count > globals.longest_page['word_count']:
+                        globals.longest_page['word_count'] = word_count
+                        globals.longest_page['url'] = url
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
