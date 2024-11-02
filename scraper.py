@@ -89,6 +89,13 @@ def is_valid(url):
                 r"|thmx|mso|arff|rtf|jar|csv"
                     r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path)):
                 return False
+            
+            # Exclude URLs with dates
+            if (re.search(r"(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4})") or
+                re.search(r"?:\d{4}[-/]\d{1,2}[-/]\d{1,2})")    or
+                re.search(r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})")
+                ):
+                return False
 
             # Exclude URLs with excessive query parameters
             if len(parse_qs(query)) > 2:
