@@ -11,7 +11,6 @@ allowed_domains = [
     "today.uci.edu"
 ]
 
-URL_SIMILARITY_THRESHOLD: float = .85
 
 unique_urls_trie: DomainTrie = DomainTrie()
 unique_urls = set()
@@ -29,6 +28,36 @@ Token: TypeAlias = str
 HASH: TypeAlias = int
 Token_Tuple: TypeAlias = tuple[Token, Token, Token]
 url_string: TypeAlias = str
+
+# for the read function, the first argument passed into action_to_take MUST be the global variable itself
+
+
+def read_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any] = None, *args) -> Any:
+    with global_variable_lock:
+        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation {
+              action_to_take.__name__}({global_to_read, args})")
+        if action_to_take == None:
+            result = global_to_read
+        elif len(args) == 0:
+            result = action_to_take(global_to_read)
+        else:
+            result = action_to_take(global_to_read, *args)
+
+    return result
+
+
+def write_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any], *args) -> Any:
+    with global_variable_lock:
+        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation {
+              action_to_take.__name__}({global_to_read, args})")
+        if len(args) == 0:
+            result = action_to_take(global_to_read)
+        else:
+            result = action_to_take(global_to_read, *args)
+
+        print(f'Successfully altered global variable')
+
+    return result
 
 
 def unique_urls_trie_insert(domain_to_insert: url_string) -> bool:
