@@ -10,7 +10,7 @@ allowed_domains = [
     "today.uci.edu"
 ]
 
-URL_SIMILARITY_THRESHOLD: float = .8
+URL_SIMILARITY_THRESHOLD: float = .85
 
 unique_urls_trie: DomainTrie = DomainTrie()
 unique_urls = set()
