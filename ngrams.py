@@ -1,8 +1,18 @@
+from collections import deque
 import random
+from typing import Any, Callable
 from globals import (Token, Token_Tuple, HASH)
 
 
-def n_gram(token_list: list[Token], n_grams: int = globals.DEFAULT_N_GRAM_SIZE) -> list[Token_Tuple]:
+MAX_ALLOWED_SIMILARITY = .65
+N_GRAM_HASHED_LIST_MAX_SIZE = 100
+DEFAULT_N_GRAM_SIZE = 3
+
+N_GRAM_HASHED_LIST: deque[set[HASH]] = deque()
+
+
+def n_gram(token_list: list[Token], n_grams: int = DEFAULT_N_GRAM_SIZE) -> list[Token_Tuple]:
+
     # determine what percentage of the document to select
     # set the value between 0 and 1
     AMOUNT_OF_LIST_TO_SELECT: float = 1
@@ -41,7 +51,7 @@ def get_similarity_score(n_gram_hash1: set[HASH], n_gram_hash2: set[HASH]) -> fl
     return intersection_length / union_length
 
 
-def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_gram_hash1: set[HASH], max_allowed_score: float = globals.MAX_ALLOWED_SIMILARITY) -> float:
+def should_evaluate_based_on_similarity_score(n_grams_list: list[set[HASH]], n_gram_hash1: set[HASH], max_allowed_score: float = MAX_ALLOWED_SIMILARITY) -> float:
     for curr_n_gram_hash in n_grams_list:
         if get_similarity_score(n_gram_hash1=n_gram_hash1, n_gram_hash2=curr_n_gram_hash) > max_allowed_score:
             return False
@@ -56,3 +66,27 @@ def go_thru_n_gram_phase(token_list: list[Token]) -> bool:
         should_evaluate_based_on_similarity_score, hashed_tuple)
 
     return should_read
+
+
+def read_n_gram_hash_list(operation: Callable[[deque[set[HASH]]], Any], *args) -> Any:
+    # Access the global variable
+    # lock
+    global N_GRAM_HASHED_LIST
+    # Perform the operation on the global data structure
+    result: Any = operation(N_GRAM_HASHED_LIST, *args)
+    # unlock
+    return result
+
+
+def add_to_n_gram_hashed_list(hash_to_add: set[HASH]) -> bool:
+    if type(hash_to_add) != set():
+        hash_to_add = set(hash_to_add)
+
+    # lock
+    if len(N_GRAM_HASHED_LIST) == N_GRAM_HASHED_LIST_MAX_SIZE:
+        N_GRAM_HASHED_LIST.popleft()
+
+    N_GRAM_HASHED_LIST.append(hash_to_add)
+
+    # unlock
+    return True
