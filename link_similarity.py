@@ -3,6 +3,7 @@ from operator import __eq__
 import sys
 from typing import Any, Callable, TypeAlias
 from globals import url_string
+import globals as gb
 from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
 from test_suite import test_function
 
@@ -219,6 +220,18 @@ def test_should_evaluate_link_based_on_closeness():
     test_url2: url_string = "https://wics.ics.uci.edu/events/category/wics-bonding/day/2013-08-23/"
 
     test_function(False, __eq__, should_evaluate_url, test_url1, test_url2)
+
+
+def determine_if_should_evaluate_url_against_set(url_set: set[url_string], possible_new_url: url_string) -> bool:
+    for already_evaluated_url in url_set:
+        if not should_evaluate_url(url1=already_evaluated_url, url2=possible_new_url):
+            return False
+
+    return True
+
+
+def go_thru_url_evaluation_phase_thread_safe(possible_new_url: url_string):
+    return gb.read_global_variable(gb.unique_urls, gb.unique_urls_lock, determine_if_should_evaluate_url_against_set, possible_new_url)
 
 
 RUN_SHOULD_EVAL_LINK_TEST: bool = True
