@@ -6,11 +6,17 @@ import random
 from collections import deque
 import globals
 from globals import (Token, Token_Tuple, HASH, url_string)
-import ngrams
 from tokenizer import tokenize
-import ngrams 
+import ngrams
+import link_similarity
+
+INCLUDE_N_GRAMS_PHASE: bool = False
+INCLUDE_URL_SIMILARITY_CHECKING: bool = False
+
 
 # Define the function to compute word frequencies
+
+
 def compute_word_frequencies(tokens):
     global word_frequencies
 
@@ -76,7 +82,7 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with disallowed file extensions
-            if  (re.search(r"/(search|login|logout|api|admin|raw|static|calendar|event)/", path) or
+            if (re.search(r"/(search|login|logout|api|admin|raw|static|calendar|event)/", path) or
                 re.search(r"/(page|p)/?\d+", path) or
                 re.search(r"(sessionid|sid|session)=[\w\d]{32}", query) or
                 re.match(
@@ -89,12 +95,13 @@ def is_valid(url):
                 r"|thmx|mso|arff|rtf|jar|csv"
                     r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", path)):
                 return False
-            
+
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path)    or
-                re.search(r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
-                ):
+                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                    re.search(
+                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                    ):
                 return False
 
             # Exclude URLs with excessive query parameters
@@ -102,7 +109,8 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with specific query parameters
-            disallowed_params = {'do', 'tab_details', 'tab_files', 'image', 'ns'}
+            disallowed_params = {'do', 'tab_details',
+                                 'tab_files', 'image', 'ns'}
             query_params = set(parse_qs(query).keys())
             if disallowed_params.intersection(query_params):
                 return False
@@ -224,7 +232,14 @@ def scraper(url, resp):
                 # Remove stop words from tokens
                 filtered_tokens = filter_stop_words(tokens)
 
-                #should_go_thru_website = ngrams.go_thru_n_gram_phase( filtered_tokens)
+                if INCLUDE_N_GRAMS_PHASE:  # basically using this as a c pre processor command on whether or not to include the N_GRAMS_PHASE
+
+                    should_go_thru_website = ngrams.go_thru_n_gram_phase(
+                        filtered_tokens)
+
+                if INCLUDE_URL_SIMILARITY_CHECKING:
+                    should_go_thru_website = link_similarity.go_thru_url_evaluation_phase_thread_safe(
+                        url)
 
                 if should_go_thru_website:
                     # Compute word frequencies
@@ -239,19 +254,14 @@ def scraper(url, resp):
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
     valid_links = list()
-    
+
     if should_go_thru_website:
-        
+
         # Extract next links
         links = extract_next_links(url, resp)
 
         # Filter links using is_valid
         valid_links = [link for link in links if is_valid(link)]
-    
-    
-    
-
-    
 
     return valid_links
 
