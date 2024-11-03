@@ -98,10 +98,10 @@ def is_valid(url):
 
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
-                    re.search(
-                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
-                    ):
+                re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                re.search(
+                r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                ):
                 return False
 
             # Exclude URLs with excessive query parameters
@@ -202,8 +202,18 @@ def scraper(url, resp):
     url, _ = urldefrag(url)
 
     # Check if the URL is unique
+
     if url in globals.unique_urls:
         return []
+
+    should_evaluate_url = True
+    if INCLUDE_URL_SIMILARITY_CHECKING:
+        should_evaluate_url = link_similarity.go_thru_url_evaluation_phase_thread_safe(
+            url)
+
+    if not should_evaluate_url:
+        return []
+
     globals.unique_urls.add(url)
 
     # Update subdomains count
@@ -236,10 +246,6 @@ def scraper(url, resp):
 
                     should_go_thru_website = ngrams.go_thru_n_gram_phase(
                         filtered_tokens)
-
-                if INCLUDE_URL_SIMILARITY_CHECKING:
-                    should_go_thru_website = link_similarity.go_thru_url_evaluation_phase_thread_safe(
-                        url)
 
                 if should_go_thru_website:
                     # Compute word frequencies
