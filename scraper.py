@@ -22,7 +22,7 @@ def compute_word_frequencies(tokens):
     global word_frequencies
 
     for token in tokens:
-        # globals.word_frequencies[token] += 1
+        globals.word_frequencies[token] += 1
         # saves to json
         save_data.update_word_frequencies(token)
 
@@ -217,7 +217,7 @@ def scraper(url, resp):
     if not should_evaluate_url:
         return []
 
-    # globals.unique_urls.add(url)
+    globals.unique_urls.add(url)
     # save data to json
     save_data.update_unique_urls(url)
 
@@ -259,8 +259,8 @@ def scraper(url, resp):
                     # Update longest page
                     word_count = len(filtered_tokens)
                     if word_count > globals.longest_page['word_count']:
-                        # globals.longest_page['word_count'] = word_count
-                        # globals.longest_page['url'] = url
+                        globals.longest_page['word_count'] = word_count
+                        globals.longest_page['url'] = url
 
                         # save data to json
                         save_data.update_longest_page_wc(word_count)
