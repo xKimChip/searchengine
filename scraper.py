@@ -206,6 +206,7 @@ def scraper(url, resp):
         return []
 
     globals.unique_urls.add(url)
+    save_data.update_unique_urls(url)
 
     # Update subdomains count
     parsed_url = urlparse(url)
@@ -247,6 +248,9 @@ def scraper(url, resp):
                     if word_count > globals.longest_page['word_count']:
                         globals.longest_page['word_count'] = word_count
                         globals.longest_page['url'] = url
+
+                        save_data.update_longest_page_wc(word_count)
+                        save_data.update_longest_page_url(url)
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
