@@ -5,6 +5,7 @@ from typing import Any, Callable  # , TypeAlias
 from DomainTrie import DomainTrie
 from threading import Lock
 from test_suite import test_function
+import save_data
 
 allowed_domains = [
     "ics.uci.edu",
@@ -165,6 +166,7 @@ def update_word_frequencies(tokens: list[Token]):
 
     for token in tokens:
         word_frequencies[token] += 1
+        save_data.update_word_frequencies(token)
 
 
 def update_word_frequencies_thread_safe(tokens: list[Token]):
