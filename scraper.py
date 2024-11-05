@@ -9,17 +9,9 @@ from globals import (Token, Token_Tuple, HASH, url_string)
 from tokenizer import tokenize
 import ngrams
 import link_similarity
-import save_data 
-
+import save_data
 INCLUDE_N_GRAMS_PHASE: bool = False
 INCLUDE_URL_SIMILARITY_CHECKING: bool = False
-
-
-# Define the function to compute word frequencies
-
-
-
-
 
 
 # Define the function to filter out stop words
@@ -97,9 +89,9 @@ def is_valid(url):
 
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
-                    re.search(
-                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                        re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                        re.search(
+                        r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
                     ):
                 return False
 
@@ -214,8 +206,6 @@ def scraper(url, resp):
         return []
 
     globals.unique_urls.add(url)
-    # save data to json
-    save_data.update_unique_urls(url)
 
     # Update subdomains count
     parsed_url = urlparse(url)
@@ -250,17 +240,14 @@ def scraper(url, resp):
 
                 if should_go_thru_website:
                     # Compute word frequencies
-                    globals.compute_word_frequencies(filtered_tokens)
+                    globals.update_word_frequencies_thread_safe(
+                        filtered_tokens)
 
                     # Update longest page
                     word_count = len(filtered_tokens)
                     if word_count > globals.longest_page['word_count']:
                         globals.longest_page['word_count'] = word_count
                         globals.longest_page['url'] = url
-
-                        # save data to json
-                        save_data.update_longest_page_wc(word_count)
-                        save_data.update_longest_page_url(url)
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
