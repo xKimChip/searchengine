@@ -238,7 +238,7 @@ def scraper(url, resp):
 
                 if INCLUDE_N_GRAMS_PHASE:  # basically using this as a c pre processor command on whether or not to include the N_GRAMS_PHASE
 
-                    should_go_thru_website = ngrams.go_thru_n_gram_phase(
+                    should_go_thru_website = ngrams.go_thru_n_grams_phase_thread_safe(
                         filtered_tokens)
 
                 if should_go_thru_website:

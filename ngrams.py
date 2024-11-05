@@ -6,7 +6,8 @@ import globals as gb
 
 
 MAX_ALLOWED_SIMILARITY = .65
-N_GRAM_HASHED_LIST_MAX_SIZE = 100
+# putting -1 here makes this infinitely large in size
+N_GRAM_HASHED_LIST_MAX_SIZE = -1
 DEFAULT_N_GRAM_SIZE = 3
 
 N_GRAM_HASHED_LIST: deque[set[HASH]] = deque()
