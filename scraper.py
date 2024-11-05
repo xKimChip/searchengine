@@ -9,6 +9,7 @@ from globals import (Token, Token_Tuple, HASH, url_string)
 from tokenizer import tokenize
 import ngrams
 import link_similarity
+import save_data 
 
 INCLUDE_N_GRAMS_PHASE: bool = False
 INCLUDE_URL_SIMILARITY_CHECKING: bool = False
@@ -21,7 +22,9 @@ def compute_word_frequencies(tokens):
     global word_frequencies
 
     for token in tokens:
-        globals.word_frequencies[token] += 1
+        # globals.word_frequencies[token] += 1
+        # saves to json
+        save_data.update_word_frequencies(token)
 
 # Define the function to filter out stop words
 
@@ -214,7 +217,9 @@ def scraper(url, resp):
     if not should_evaluate_url:
         return []
 
-    globals.unique_urls.add(url)
+    # globals.unique_urls.add(url)
+    # save data to json
+    save_data.update_unique_urls(url)
 
     # Update subdomains count
     parsed_url = urlparse(url)
@@ -254,8 +259,12 @@ def scraper(url, resp):
                     # Update longest page
                     word_count = len(filtered_tokens)
                     if word_count > globals.longest_page['word_count']:
-                        globals.longest_page['word_count'] = word_count
-                        globals.longest_page['url'] = url
+                        # globals.longest_page['word_count'] = word_count
+                        # globals.longest_page['url'] = url
+
+                        # save data to json
+                        save_data.update_longest_page_wc(word_count)
+                        save_data.update_longest_page_url(url)
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")
