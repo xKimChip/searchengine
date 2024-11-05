@@ -206,7 +206,7 @@ def scraper(url, resp):
         return []
 
     globals.unique_urls.add(url)
-    save_data.update_unique_urls(url)
+    save_data.update_unique_urls()
 
     # Update subdomains count
     parsed_url = urlparse(url)

@@ -3,10 +3,10 @@ import json
 # repetitive code that only changes 1 line, but can be refactor later 
 filename = 'data.json'
 
-def update_unique_urls(url):
+def update_unique_urls():
     with open(filename, 'r+') as f:
         content = json.load(f)
-        content['unique_urls'].append(url)
+        content['unique_urls'] += 1
 
         f.seek(0)
         json.dump(content, f)
@@ -42,7 +42,7 @@ def update_word_frequencies(word):
 
 def reset_json():
     content = {
-        "unique_urls": [],
+        "unique_urls": 0,
         "longest_page": {
             "url": "",
             "word_count": 0

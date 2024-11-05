@@ -51,8 +51,7 @@ generic_global_var_lock = Lock()
 
 def read_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any] = None, *args) -> Any:
     with global_variable_lock:
-        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation {
-              action_to_take.__name__}({global_to_read, args})")
+        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
         if action_to_take == None:
             result = global_to_read
         elif len(args) == 0:
@@ -66,8 +65,7 @@ def read_global_variable(global_to_read: Any, global_variable_lock: Lock, action
 def read_global_variable_action_does_not_pass_global(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any] = None, *args) -> Any:
     with global_variable_lock:
         # note that this print could be out of date if the global variable is passed by value and not by reference
-        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation {
-              action_to_take.__name__}({global_to_read, args})")
+        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
         if action_to_take == None:
             result = global_to_read
         elif len(args) == 0:
@@ -81,8 +79,7 @@ def read_global_variable_action_does_not_pass_global(global_to_read: Any, global
 def write_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any], *args) -> Any:
     with global_variable_lock:
         # note that this print could be out of date if the global variable is passed by value and not by reference
-        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation {
-              action_to_take.__name__}({global_to_read, args})")
+        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
         if len(args) == 0:
             result = action_to_take(global_to_read)
         else:
@@ -95,8 +92,7 @@ def write_global_variable(global_to_read: Any, global_variable_lock: Lock, actio
 
 def write_global_variable_action_does_not_pass_global(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any], *args) -> Any:
     with global_variable_lock:
-        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation {
-              action_to_take.__name__}({global_to_read, args})")
+        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
         if len(args) == 0:
             result = action_to_take()
         else:
@@ -122,8 +118,7 @@ def unique_urls_get_num_unique_trie_read_thread_safe() -> tuple[int, int]:
               total_num_unique_domains}')
         for domain in allowed_domains:
             curr_node = unique_urls_trie.search(domain)
-            num_unique_subdomains: int = unique_urls_trie.get_num_unique_subdomains_for_domain(
-                curr_node)
+            num_unique_subdomains: int = unique_urls_trie.get_num_unique_subdomains_for_domain( curr_node)
             print(f'unique subdomains for {domain} = {num_unique_subdomains}')
 
         return (total_num_unique_domains, num_unique_subdomains)
@@ -139,14 +134,11 @@ def get_generic_data_sum() -> int:
 
 
 def test_generic_data_sum() -> int:
-    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global,
-                  generic_global_var, generic_global_var_lock, get_generic_data_sum)
+    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, get_generic_data_sum)
 
-    test_function(None, __eq__, write_global_variable_action_does_not_pass_global,
-                  generic_global_var, generic_global_var_lock, pollute_generic_global_var_with_test_data)
+    test_function(None, __eq__, write_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, pollute_generic_global_var_with_test_data)
 
-    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global,
-                  generic_global_var, generic_global_var_lock, get_generic_data_sum)
+    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, get_generic_data_sum)
 
 
 def change_longest_page_subroutine(new_url: url_string, new_word_count: int):
@@ -156,8 +148,7 @@ def change_longest_page_subroutine(new_url: url_string, new_word_count: int):
 
 
 def change_longest_page_threadsafe(new_url: url_string, new_word_count: int):
-    write_global_variable_action_does_not_pass_global(
-        longest_page, longest_page_lock, change_longest_page_subroutine, new_url, new_word_count)
+    write_global_variable_action_does_not_pass_global( longest_page, longest_page_lock, change_longest_page_subroutine, new_url, new_word_count)
 
 
 def update_word_frequencies(tokens: list[Token]):
@@ -178,8 +169,7 @@ def update_word_frequencies_thread_safe(tokens: list[Token]):
 
 def get_top_50_words() -> dict[str, int]:
     # this function is already thread_safe
-    sorted_words = sorted(word_frequencies.items(),
-                          key=lambda item: item[1], reverse=True)
+    sorted_words = sorted(word_frequencies.items(), key=lambda item: item[1], reverse=True)
     top_50_words = sorted_words[:50]
     print("Top 50 words:")
     for word, freq in top_50_words:
