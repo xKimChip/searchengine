@@ -17,12 +17,6 @@ INCLUDE_URL_SIMILARITY_CHECKING: bool = False
 # Define the function to compute word frequencies
 
 
-def compute_word_frequencies(tokens):
-    global word_frequencies
-
-    for token in tokens:
-        globals.word_frequencies[token] += 1
-
 # Define the function to filter out stop words
 
 
@@ -98,10 +92,10 @@ def is_valid(url):
 
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
-                re.search(
-                r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
-                ):
+                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                    re.search(
+                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                    ):
                 return False
 
             # Exclude URLs with excessive query parameters
@@ -249,7 +243,7 @@ def scraper(url, resp):
 
                 if should_go_thru_website:
                     # Compute word frequencies
-                    compute_word_frequencies(filtered_tokens)
+                    globals.compute_word_frequencies(filtered_tokens)
 
                     # Update longest page
                     word_count = len(filtered_tokens)

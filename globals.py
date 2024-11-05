@@ -25,7 +25,9 @@ longest_page = {
 }
 longest_page_lock = Lock()
 word_frequencies = defaultdict(int)
+word_frequencies_lock: Lock = Lock()
 subdomains = defaultdict(int)
+subdomains_lock: Lock = Lock()
 MAX_TOKEN_LENGTH = 10000  # Set a reasonable maximum length
 
 today_uci_edu_path = "/department/information_computer_sciences"
@@ -155,6 +157,41 @@ def change_longest_page_subroutine(new_url: url_string, new_word_count: int):
 def change_longest_page_threadsafe(new_url: url_string, new_word_count: int):
     write_global_variable_action_does_not_pass_global(
         longest_page, longest_page_lock, change_longest_page_subroutine, new_url, new_word_count)
+
+
+def update_word_frequencies(tokens: list[Token]):
+
+    global word_frequencies
+
+    for token in tokens:
+        word_frequencies[token] += 1
+
+
+def update_word_frequencies_thread_safe(tokens: list[Token]):
+    with word_frequencies_lock:
+        update_word_frequencies(tokens)
+
+
+# def read_word_frequences_thread_safe()
+
+def get_top_50_words() -> dict[str, int]:
+    # this function is already thread_safe
+    sorted_words = sorted(word_frequencies.items(),
+                          key=lambda item: item[1], reverse=True)
+    top_50_words = sorted_words[:50]
+    print("Top 50 words:")
+    for word, freq in top_50_words:
+        print(f"{word}: {freq}")
+
+    return top_50_words
+
+
+def get_top_50_words_thread_safe() -> dict[str, int]:
+    # this function is already thread_safe
+    with word_frequencies_lock:
+        result = get_top_50_words()
+
+    return result
 
 
 if __name__ == "__main__":
