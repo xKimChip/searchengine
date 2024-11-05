@@ -46,6 +46,33 @@ class DomainTrie:
             current = current.children[part]
         return True
 
+    def get_num_unique_domains(self) -> int:
+        curr_node: TrieNode = self.root
+        num_domains_total: int = 0
+
+        def dfs(node: TrieNode):
+            count = 1 if node.is_end_of_domain else 0
+            for child in node.children.values():
+                count += dfs(child)
+
+            return count
+
+        num_domains_total = dfs(curr_node)
+        return num_domains_total
+
+    def get_num_unique_subdomains_for_domain(self, node):
+
+        def dfs(node: TrieNode):
+            print(f'Subdomains of {node}', end='\t')
+            count = 1
+            for child in node.children.values():
+                count += dfs(child)
+            return count
+        res = dfs(node)
+
+        print(f'{res}')
+        return res
+
     def __repr__(self):
         return repr(self.root)
 
