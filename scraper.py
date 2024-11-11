@@ -74,7 +74,7 @@ def is_valid(url):
                 return False
 
             # Exclude URLs with disallowed file extensions
-            if (re.search(r"/(search|login|logout|api|admin|raw|static|calendar|event)/", path) or
+            if (re.search(r"/(news|search|login|logout|api|admin|raw|static|calendar|event)/", path) or
                 re.search(r"/(page|p)/?\d+", path) or
                 re.search(r"(sessionid|sid|session)=[\w\d]{32}", query) or
                 re.match(
@@ -96,6 +96,12 @@ def is_valid(url):
                 ):
                 return False
 
+            if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", query) or
+                        re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", query) or
+                        re.search(
+                        r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", query)
+                    ):
+                return False
             # Exclude URLs with excessive query parameters
             if len(parse_qs(query)) > 2:
                 return False
@@ -148,8 +154,19 @@ def extract_next_links(url, resp):
     links = []
 
     # Check if the response is valid
-    if resp.status != 200 or resp.raw_response is None:
-        return []
+    try:
+        if not resp or not resp.raw_response.content:
+            print("Early Exit: missing content response.")
+            return links
+        if resp.status and not (200 <= resp.status < 400):
+            print("Early Exit: Invalid URL status")
+            return links
+        if len(resp.raw_response.content) < 400:
+            print("Early Exit: Low information")
+            return links
+    except Exception as e:
+        print(f"Exception occurred {e}")
+        return links
 
     if globals.url_already_in_unique_urls(url):
         return []
@@ -209,7 +226,7 @@ def scraper(url, resp):
     if not should_evaluate_url:
         return []
 
-    globals.unique_urls.add(url)
+    globals.add_url_to_unique_urls(url)
     if INCLUDE_SAVE_DATA:
         save_data.update_unique_urls()
 
@@ -256,8 +273,9 @@ def scraper(url, resp):
                     # Update longest page
                     word_count = len(filtered_tokens)
                     if word_count > globals.longest_page['word_count']:
-                        globals.longest_page['word_count'] = word_count
-                        globals.longest_page['url'] = url
+                        with globals.longest_page_lock:
+                            globals.longest_page['word_count'] = word_count
+                            globals.longest_page['url'] = url
 
                         if INCLUDE_SAVE_DATA:
                             save_data.update_longest_page_wc(word_count)
