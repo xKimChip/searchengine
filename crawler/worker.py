@@ -23,11 +23,13 @@ class Worker(Thread):
     def run(self):
         while True:
             tbd_url = self.frontier.get_tbd_url()
-            if globals.url_already_in_unique_urls(tbd_url):
-                continue
             if not tbd_url:
                 self.logger.info("Frontier is empty. Stopping Crawler.")
                 break
+            if globals.url_already_in_unique_urls(tbd_url) or globals.currently_looking_at_url(tbd_url):
+                continue
+            else:
+                globals.add_url_to_looking_at_set(tbd_url)
             resp = download(tbd_url, self.config, self.logger)
             self.logger.info(
                 f"Downloaded {tbd_url}, status <{resp.status}>, "
@@ -37,4 +39,6 @@ class Worker(Thread):
             for scraped_url in scraped_urls:
                 self.frontier.add_url(scraped_url)
             self.frontier.mark_url_complete(tbd_url)
+            globals.remove_url_from_currently_looking_at_set(tbd_url)
+
             time.sleep(self.config.time_delay)
