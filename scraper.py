@@ -10,9 +10,10 @@ from tokenizer import tokenize
 import ngrams
 import link_similarity
 import save_data
-INCLUDE_N_GRAMS_PHASE: bool = False
+INCLUDE_N_GRAMS_PHASE: bool = True
 INCLUDE_URL_SIMILARITY_CHECKING: bool = False
-
+INCLUDE_SAVE_DATA: bool = False
+MIN_TOKENIZED_SITE_LENGTH: int = 150
 
 # Define the function to filter out stop words
 
@@ -89,10 +90,10 @@ def is_valid(url):
 
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                        re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
-                        re.search(
-                        r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
-                    ):
+                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                    re.search(
+                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                ):
                 return False
 
             # Exclude URLs with excessive query parameters
@@ -148,7 +149,10 @@ def extract_next_links(url, resp):
 
     # Check if the response is valid
     if resp.status != 200 or resp.raw_response is None:
-        return links
+        return []
+
+    if globals.url_already_in_unique_urls(url):
+        return []
 
     # Check if the Content-Type is text/html
     content_type = resp.raw_response.headers.get('Content-Type', '').lower()
@@ -194,7 +198,7 @@ def scraper(url, resp):
 
     # Check if the URL is unique
 
-    if url in globals.unique_urls:
+    if globals.url_already_in_unique_urls(url):
         return []
 
     should_evaluate_url = True
@@ -206,7 +210,8 @@ def scraper(url, resp):
         return []
 
     globals.unique_urls.add(url)
-    save_data.update_unique_urls()
+    if INCLUDE_SAVE_DATA:
+        save_data.update_unique_urls()
 
     # Update subdomains count
     parsed_url = urlparse(url)
@@ -234,14 +239,19 @@ def scraper(url, resp):
                 # Remove stop words from tokens
                 filtered_tokens = filter_stop_words(tokens)
 
-                if INCLUDE_N_GRAMS_PHASE:  # basically using this as a c pre processor command on whether or not to include the N_GRAMS_PHASE
+                if len(filtered_tokens < MIN_TOKENIZED_SITE_LENGTH):
+                    should_go_thru_website = False
+
+                # basically using this as a c pre processor command on whether or not to include the N_GRAMS_PHASE
+                if INCLUDE_N_GRAMS_PHASE and should_go_thru_website:
 
                     should_go_thru_website = ngrams.go_thru_n_grams_phase_thread_safe(
                         filtered_tokens)
 
                 if should_go_thru_website:
                     # Compute word frequencies
-                    globals.update_word_frequencies_thread_safe(filtered_tokens)
+                    globals.update_word_frequencies_thread_safe(
+                        filtered_tokens)
 
                     # Update longest page
                     word_count = len(filtered_tokens)
@@ -249,8 +259,9 @@ def scraper(url, resp):
                         globals.longest_page['word_count'] = word_count
                         globals.longest_page['url'] = url
 
-                        save_data.update_longest_page_wc(word_count)
-                        save_data.update_longest_page_url(url)
+                        if INCLUDE_SAVE_DATA:
+                            save_data.update_longest_page_wc(word_count)
+                            save_data.update_longest_page_url(url)
 
             except Exception as e:
                 print(f"Error processing content from {url}: {e}")

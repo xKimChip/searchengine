@@ -7,6 +7,7 @@ from threading import Lock
 from test_suite import test_function
 import save_data
 
+GLOBAL_PRINTS_ACTIVE: bool = False
 allowed_domains = [
     "ics.uci.edu",
     "cs.uci.edu",
@@ -49,9 +50,31 @@ generic_global_var_lock = Lock()
 # for the read function, the first argument passed into action_to_take MUST be the global variable itself
 
 
+def url_already_in_unique_urls(url: url_string) -> bool:
+    with unique_urls_lock:
+        result: bool = url in unique_urls
+
+    if GLOBAL_PRINTS_ACTIVE:
+        print(f'Is {url} already in unique_urls: {result}')
+
+    return result
+
+
+def add_url_to_unique_urls(url: url_string) -> None:
+    with unique_urls_lock:
+        global unique_urls
+        unique_urls.add(url)
+
+    if GLOBAL_PRINTS_ACTIVE:
+        print(f'Added {url} to unique_urls')
+
+
 def read_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any] = None, *args) -> Any:
     with global_variable_lock:
-        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f"\n\tAcessing global variable {global_to_read}")
+            print(f"\tRunning operation {action_to_take.__name__}", end=', ')
+            print(f"({global_to_read, args})")
         if action_to_take == None:
             result = global_to_read
         elif len(args) == 0:
@@ -65,7 +88,10 @@ def read_global_variable(global_to_read: Any, global_variable_lock: Lock, action
 def read_global_variable_action_does_not_pass_global(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any] = None, *args) -> Any:
     with global_variable_lock:
         # note that this print could be out of date if the global variable is passed by value and not by reference
-        print(f"\n\tAcessing global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f"\n\tAcessing global variable {global_to_read}")
+            print(f"\tRunning operation {action_to_take.__name__}", end=', ')
+            print(f"({global_to_read, args})")
         if action_to_take == None:
             result = global_to_read
         elif len(args) == 0:
@@ -79,7 +105,10 @@ def read_global_variable_action_does_not_pass_global(global_to_read: Any, global
 def write_global_variable(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any], *args) -> Any:
     with global_variable_lock:
         # note that this print could be out of date if the global variable is passed by value and not by reference
-        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f"\n\tAcessing global variable {global_to_read}")
+            print(f"\tRunning operation {action_to_take.__name__}", end=', ')
+            print(f"({global_to_read, args})")
         if len(args) == 0:
             result = action_to_take(global_to_read)
         else:
@@ -92,7 +121,10 @@ def write_global_variable(global_to_read: Any, global_variable_lock: Lock, actio
 
 def write_global_variable_action_does_not_pass_global(global_to_read: Any, global_variable_lock: Lock, action_to_take: Callable[..., Any], *args) -> Any:
     with global_variable_lock:
-        print(f"\n\tReading global variable {global_to_read}\n\tRunning operation { action_to_take.__name__}({global_to_read, args})")
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f"\n\tAcessing global variable {global_to_read}")
+            print(f"\tRunning operation {action_to_take.__name__}", end=', ')
+            print(f"({global_to_read, args})")
         if len(args) == 0:
             result = action_to_take()
         else:
@@ -104,7 +136,6 @@ def write_global_variable_action_does_not_pass_global(global_to_read: Any, globa
 
 
 def unique_urls_trie_insert_thread_safe(domain_to_insert: url_string) -> bool:
-    # lock
     with unique_urls_trie_lock:
         global unique_urls_trie
         unique_urls_trie.insert(domain_to_insert)
@@ -114,12 +145,15 @@ def unique_urls_trie_insert_thread_safe(domain_to_insert: url_string) -> bool:
 def unique_urls_get_num_unique_trie_read_thread_safe() -> tuple[int, int]:
     with unique_urls_trie_lock:
         total_num_unique_domains = unique_urls_trie.get_num_unique_domains()
-        print(f'num unique domains total = {
-              total_num_unique_domains}')
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f'num unique domains total = {total_num_unique_domains}')
         for domain in allowed_domains:
             curr_node = unique_urls_trie.search(domain)
-            num_unique_subdomains: int = unique_urls_trie.get_num_unique_subdomains_for_domain( curr_node)
-            print(f'unique subdomains for {domain} = {num_unique_subdomains}')
+            num_unique_subdomains: int = unique_urls_trie.get_num_unique_subdomains_for_domain(
+                curr_node)
+            if GLOBAL_PRINTS_ACTIVE:
+                print(f'unique subdomains for {
+                      domain} = {num_unique_subdomains}')
 
         return (total_num_unique_domains, num_unique_subdomains)
 
@@ -134,11 +168,14 @@ def get_generic_data_sum() -> int:
 
 
 def test_generic_data_sum() -> int:
-    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, get_generic_data_sum)
+    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global,
+                  generic_global_var, generic_global_var_lock, get_generic_data_sum)
 
-    test_function(None, __eq__, write_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, pollute_generic_global_var_with_test_data)
+    test_function(None, __eq__, write_global_variable_action_does_not_pass_global,
+                  generic_global_var, generic_global_var_lock, pollute_generic_global_var_with_test_data)
 
-    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global, generic_global_var, generic_global_var_lock, get_generic_data_sum)
+    test_function(get_generic_data_sum(), __eq__, read_global_variable_action_does_not_pass_global,
+                  generic_global_var, generic_global_var_lock, get_generic_data_sum)
 
 
 def change_longest_page_subroutine(new_url: url_string, new_word_count: int):
@@ -148,7 +185,8 @@ def change_longest_page_subroutine(new_url: url_string, new_word_count: int):
 
 
 def change_longest_page_threadsafe(new_url: url_string, new_word_count: int):
-    write_global_variable_action_does_not_pass_global( longest_page, longest_page_lock, change_longest_page_subroutine, new_url, new_word_count)
+    write_global_variable_action_does_not_pass_global(
+        longest_page, longest_page_lock, change_longest_page_subroutine, new_url, new_word_count)
 
 
 def update_word_frequencies(tokens: list[Token]):
@@ -169,16 +207,18 @@ def update_word_frequencies_thread_safe(tokens: list[Token]):
 
 def get_top_50_words() -> dict[str, int]:
     # this function is already thread_safe
-    sorted_words = sorted(word_frequencies.items(), key=lambda item: item[1], reverse=True)
+    sorted_words = sorted(word_frequencies.items(),
+                          key=lambda item: item[1], reverse=True)
     top_50_words = sorted_words[:50]
-    print("Top 50 words:")
-    for word, freq in top_50_words:
-        print(f"{word}: {freq}")
+    if GLOBAL_PRINTS_ACTIVE:
+        print("Top 50 words:")
+        for word, freq in top_50_words:
+            print(f"{word}: {freq}")
 
     return top_50_words
 
 
-def get_top_50_words_thread_safe() -> dict[str, int]:
+def get_top_50_words_atomic_access() -> dict[str, int]:
     # this function is already thread_safe
     with word_frequencies_lock:
         result = get_top_50_words()
