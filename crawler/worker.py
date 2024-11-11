@@ -5,6 +5,7 @@ from utils.download import download
 from utils import get_logger
 import scraper
 import time
+import globals
 
 
 class Worker(Thread):
@@ -13,13 +14,17 @@ class Worker(Thread):
         self.config = config
         self.frontier = frontier
         # basic check for requests in scraper
-        assert {getsource(scraper).find(req) for req in {"from requests import", "import requests"}} == {-1}, "Do not use requests in scraper.py"
-        assert {getsource(scraper).find(req) for req in {"from urllib.request import", "import urllib.request"}} == {-1}, "Do not use urllib.request in scraper.py"
+        assert {getsource(scraper).find(req) for req in {
+            "from requests import", "import requests"}} == {-1}, "Do not use requests in scraper.py"
+        assert {getsource(scraper).find(req) for req in {"from urllib.request import",
+                                                         "import urllib.request"}} == {-1}, "Do not use urllib.request in scraper.py"
         super().__init__(daemon=True)
-        
+
     def run(self):
         while True:
             tbd_url = self.frontier.get_tbd_url()
+            if globals.url_already_in_unique_urls(tbd_url):
+                continue
             if not tbd_url:
                 self.logger.info("Frontier is empty. Stopping Crawler.")
                 break
@@ -27,7 +32,7 @@ class Worker(Thread):
             self.logger.info(
                 f"Downloaded {tbd_url}, status <{resp.status}>, "
                 f"using cache {self.config.cache_server}.")
-            #print("TEST")
+            # print("TEST")
             scraped_urls = scraper.scraper(tbd_url, resp)
             for scraped_url in scraped_urls:
                 self.frontier.add_url(scraped_url)
