@@ -40,10 +40,31 @@ Token_Tuple = tuple[Token, Token, Token]
 url_string = str
 
 lock_to_global_dict: dict[Lock, Any] = dict()
-
+currently_looking_at_set: set[url_string] = set()
+currently_looking_at_set_lock: Lock = Lock()
 generic_global_var: list = list()
 generic_global_var_lock = Lock()
 
+
+def currently_looking_at_url(url: url_string) -> bool:
+    return url in currently_looking_at_set
+
+
+def currently_looking_at_url_atomic(url: url_string) -> bool:
+    with currently_looking_at_set_lock:
+        result: bool = currently_looking_at_url(url)
+
+    return result
+
+
+def add_url_to_looking_at_set(url: url_string):
+    with currently_looking_at_set_lock:
+        currently_looking_at_set.add(url)
+
+
+def remove_url_from_currently_looking_at_set(url: url_string):
+    with currently_looking_at_set_lock:
+        currently_looking_at_set.remove(url)
 # lock_to_global_dict[generic_global_var_lock] = generic_global_var
 
 # def add_global_lock_variable_combo
