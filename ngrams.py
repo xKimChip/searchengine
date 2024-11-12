@@ -115,17 +115,6 @@ def should_eval_n_grammed_tokens_based_on_similarity_thread_safe(n_gram_hash: se
     return gb.read_global_variable(N_GRAM_HASHED_LIST, N_GRAM_HASHED_LIST_LOCK, should_evaluate_based_on_similarity_score, n_gram_hash, max_allowed_score)
 
 
-def go_thru_n_gram_phase(token_list: list[Token]) -> bool:
-    tuple_list: list[Token_Tuple] = n_gram(token_list=token_list)
-    hashed_tuple: set[HASH] = make_set_of_n_gram_hashes(tuple_list=tuple_list)
-    should_read = read_n_gram_hash_list(
-        should_evaluate_based_on_similarity_score, hashed_tuple)
-
-    return should_read
-
-
-# def get_similarity_score_thread_safe()
-
 def add_to_n_gram_hashed_list(hash_to_add: set[HASH]) -> bool:
     if type(hash_to_add) != set():
         hash_to_add = set(hash_to_add)
@@ -140,23 +129,14 @@ def add_to_n_gram_hashed_list(hash_to_add: set[HASH]) -> bool:
     return True
 
 
-def add_to_n_gram_hashed_list_thread_safe(hash_to_add: set[HASH]) -> bool:
-
-    if type(hash_to_add) != set:
-        if hasattr(hash_to_add, '__iter__'):
-            hash_to_add = set(hash_to_add)
-        else:
-            return False
+def add_to_n_gram_hashed_list_thread_safe(hash_to_add: set[HASH]):
 
     with N_GRAM_HASHED_LIST_LOCK:
 
-        global N_GRAM_HASHED_LIST
         if len(N_GRAM_HASHED_LIST) == N_GRAM_HASHED_LIST_MAX_SIZE:
             N_GRAM_HASHED_LIST.popleft()
 
         N_GRAM_HASHED_LIST.append(hash_to_add)
-
-    return True
 
 
 def go_thru_n_grams_phase_thread_safe(token_list: list[Token]):
@@ -170,14 +150,14 @@ def go_thru_n_grams_phase_thread_safe(token_list: list[Token]):
     if PRINTS_ACTIVE:
         print(f'First 10 hashed tuples = {list(hashed_tuple)[:10]}')
     # should_read = should_eval_n_grammed_tokens_based_on_similarity_thread_safe( hashed_tuple)
-    should_read = should_evaluate_based_on_n_gram_hash_similarity_thread_safe(
+    should_read: bool = should_evaluate_based_on_n_gram_hash_similarity_thread_safe(
         hashed_tuple)
 
     if PRINTS_ACTIVE:
         print(f'Should read = {should_read}')
 
     if should_read:
-        add_to_n_gram_hashed_list(hash_to_add=hashed_tuple)
+        add_to_n_gram_hashed_list_thread_safe(hash_to_add=hashed_tuple)
 
     if PRINTS_ACTIVE:
         print(f'New len of hashed-list = {len(N_GRAM_HASHED_LIST)}')

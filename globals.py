@@ -52,33 +52,27 @@ def currently_looking_at_url(url: url_string) -> bool:
 
 def currently_looking_at_url_atomic(url: url_string) -> bool:
     with currently_looking_at_set_lock:
-        result: bool = currently_looking_at_url(url)
-
-    return result
+        return currently_looking_at_url(url)
 
 
 def add_url_to_looking_at_set(url: url_string):
     with currently_looking_at_set_lock:
+        global currently_looking_at_set
         currently_looking_at_set.add(url)
 
 
 def remove_url_from_currently_looking_at_set(url: url_string):
     with currently_looking_at_set_lock:
+        global currently_looking_at_set
         currently_looking_at_set.remove(url)
 # lock_to_global_dict[generic_global_var_lock] = generic_global_var
-
-# def add_global_lock_variable_combo
-# for the read function, the first argument passed into action_to_take MUST be the global variable itself
 
 
 def url_already_in_unique_urls(url: url_string) -> bool:
     with unique_urls_lock:
-        result: bool = url in unique_urls
-
-    if GLOBAL_PRINTS_ACTIVE:
-        print(f'Is {url} already in unique_urls: {result}')
-
-    return result
+        if GLOBAL_PRINTS_ACTIVE:
+            print(f'Is {url} already in unique_urls: {url in unique_urls}')
+        return url in unique_urls
 
 
 def add_url_to_unique_urls(url: url_string) -> None:

@@ -90,17 +90,17 @@ def is_valid(url):
 
             # Exclude URLs with dates
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", path) or
-                    re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
-                    re.search(
-                    r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
-                ):
+                        re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", path) or
+                        re.search(
+                        r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", path)
+                    ):
                 return False
 
             if (re.search(r"(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2})", query) or
-                        re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", query) or
-                        re.search(
-                        r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", query)
-                    ):
+                re.search(r"(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})", query) or
+                re.search(
+                r"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s\d{1,2},\s\d{4})", query)
+                ):
                 return False
             # Exclude URLs with excessive query parameters
             if len(parse_qs(query)) > 2:
@@ -215,15 +215,12 @@ def scraper(url, resp):
 
     # Check if the URL is unique
 
-    if globals.url_already_in_unique_urls(url):
-        return []
-
     should_evaluate_url = True
     if INCLUDE_URL_SIMILARITY_CHECKING:
         should_evaluate_url = link_similarity.go_thru_url_evaluation_phase_thread_safe(
             url)
 
-    if not should_evaluate_url:
+    if globals.url_already_in_unique_urls(url) or not should_evaluate_url:
         return []
 
     globals.add_url_to_unique_urls(url)
@@ -256,7 +253,7 @@ def scraper(url, resp):
                 # Remove stop words from tokens
                 filtered_tokens = filter_stop_words(tokens)
 
-                if len(filtered_tokens < MIN_TOKENIZED_SITE_LENGTH):
+                if len(filtered_tokens) < MIN_TOKENIZED_SITE_LENGTH:
                     should_go_thru_website = False
 
                 # basically using this as a c pre processor command on whether or not to include the N_GRAMS_PHASE
