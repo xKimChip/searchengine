@@ -10,13 +10,28 @@ import globals
 from tokenizer import tokenize
 
 # Posting class definition
+
+
 class Posting:
     def __init__(self, doc_id, tf, tf_idf):
         self.doc_id = doc_id
         self.tf = tf
         self.tf_idf = tf_idf
 
+    def __repr__(self) -> str:
+        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+
+    def __str__(self) -> str:
+        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+
+    def __eq__(self, other):
+        return self.doc_id == other.doc_id
+
+    def __hash__(self):
+        return hash(self.doc_id)
 # Function to read JSON file
+
+
 def read_json_file(file_path):
     try:
         with open(file_path, 'r', encoding='ascii') as f:
@@ -30,6 +45,8 @@ def read_json_file(file_path):
         return None, None
 
 # Function to extract text from HTML content
+
+
 def extract_text_from_html(html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -42,6 +59,8 @@ def extract_text_from_html(html_content):
         return ''
 
 # Function to calculate term frequencies
+
+
 def calculate_term_frequencies(tokens):
     tf_dict = defaultdict(int)
     for token in tokens:
@@ -49,6 +68,8 @@ def calculate_term_frequencies(tokens):
     return tf_dict
 
 # Function to process a single JSON file and return doc_id and term frequencies
+
+
 def process_json_file(file_path):
     doc_id, html_content = read_json_file(file_path)
     if not html_content:
@@ -62,6 +83,8 @@ def process_json_file(file_path):
     term_frequencies = calculate_term_frequencies(tokens)
     return (doc_id, term_frequencies)
 
+
+resulting_pickle_file_name = 'inverted_index.pkl'
 # Main execution block
 if __name__ == '__main__':
     inverted_index = defaultdict(list)
@@ -115,11 +138,11 @@ if __name__ == '__main__':
             inverted_index[token].append(posting)
 
     # Save the inverted index to disk
-    with open('inverted_index.pkl', 'wb') as f:
+    with open(resulting_pickle_file_name, 'wb') as f:
         pickle.dump(inverted_index, f)
 
     # Get the size of the index file in KB
-    index_size_kb = os.path.getsize('inverted_index.pkl') / 1024
+    index_size_kb = os.path.getsize(resulting_pickle_file_name) / 1024
 
     # Display the analytics
     print("\n=== Index Analytics ===")

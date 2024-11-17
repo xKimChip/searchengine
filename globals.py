@@ -167,8 +167,8 @@ def unique_urls_get_num_unique_trie_read_thread_safe() -> tuple[int, int]:
             num_unique_subdomains: int = unique_urls_trie.get_num_unique_subdomains_for_domain(
                 curr_node)
             if GLOBAL_PRINTS_ACTIVE:
-                print(f'unique subdomains for {
-                      domain} = {num_unique_subdomains}')
+                print(f'unique subdomains for {domain}', end='')
+                print(f' = {num_unique_subdomains}')
 
         return (total_num_unique_domains, num_unique_subdomains)
 
