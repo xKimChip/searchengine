@@ -10,7 +10,9 @@ import threading
 token = str
 
 
+EXTRA_PRINTS_ACTIVE: bool = False
 MAX_LINKS_SHOWN: int = 5
+TESTING: bool = True
 
 
 def get_unpickled_document(pickle_file: str) -> Any:
@@ -18,12 +20,27 @@ def get_unpickled_document(pickle_file: str) -> Any:
         return pickle.loads(pickle_file)
 
 
-inverted_index: dict[token, list[Posting]
-                     ] = get_unpickled_document(resulting_pickle_file_name)
+if TESTING:
+    inverted_index = {
+        "hello": [Posting(2, 2, 3), Posting(3, 2, 3), Posting(4, 2, 3), Posting(1, 2, 3), Posting(5, 2, 3),],
+        "run": [Posting(2, 2, 3)],
+        "walk": [Posting(3, 2, 3)],
+        "live": [Posting(4, 2, 3)],
+        "exist": [Posting(5, 2, 3)],
+        "believe": [Posting(5, 2, 3)],
+        "goodbye": [Posting(6, 2, 3)],
+    }
+else:
+    inverted_index: dict[token, list[Posting]
+                         ] = get_unpickled_document(resulting_pickle_file_name)
+
+
+if EXTRA_PRINTS_ACTIVE:
+    print(f'inverted_index= {inverted_index}')
 
 
 def get_query_result(query_term: token) -> set[Posting]:
-    return set(inverted_index[query_term])
+    return set(inverted_index.get(query_term)) if inverted_index.get(query_term) else set()
 
 
 def get_query_results_and(query_terms: list[token]) -> list[Posting]:
@@ -32,11 +49,9 @@ def get_query_results_and(query_terms: list[token]) -> list[Posting]:
 
     for query in query_terms:
         query_res: list[Posting] = get_query_result(query)
-        if result:
-            result.intersection_update(query_res)
+        result.intersection_update(query_res)
 
-    res_list = list(result)
-    return sorted(res_list, key=lambda curr_posting: curr_posting.tf_idf)
+    return sorted(result, key=lambda curr_posting: curr_posting.tf_idf)
 
 
 def get_query_results_and_multithreaded(query_terms: list[token]) -> list[Posting]:
@@ -46,20 +61,24 @@ def get_query_results_and_multithreaded(query_terms: list[token]) -> list[Postin
     results_lock: threading.Lock = threading.Lock()
     threads: list[threading.Thread] = list()
 
-    def get_internal_query_result(query_term: token) -> set[Posting]:
-        query_res = set(inverted_index[query_term])
+    def get_internal_query_result(query_term: token) -> list[Posting]:
+        query_res = get_query_result(query_term)
         with results_lock:
             results.append(query_res)
 
     for query in query_terms:
+        if EXTRA_PRINTS_ACTIVE:
+            print(f'Args = {query}')
         new_thread = threading.Thread(
-            target=get_internal_query_result, args=query)
+            target=get_internal_query_result, args=[query])
         threads.append(new_thread)
         new_thread.start()
 
     for thread in threads:
         thread.join()
 
+    if not results:
+        return None
     final_result: set[Posting] = results[0]
     for result in results[1:]:
         final_result.intersection_update(result)
@@ -94,7 +113,7 @@ def parse_queries(query_list: list[token]) -> list[list[token]]:
 
 def get_query_results_from_user_input(queries_list: list[list[token]]) -> list[Posting]:
     query_results: list[list[Posting]] = list()
-    query_results_lock: threading.Lock = thread.Lock()
+    query_results_lock: threading.Lock = threading.Lock()
     threads: list[threading.Threads] = list()
 
     def append_query_to_query_results(query_terms):
@@ -105,13 +124,17 @@ def get_query_results_from_user_input(queries_list: list[list[token]]) -> list[P
 
     for query in queries_list:
         new_thread = threading.Thread(
-            target=append_query_to_query_results, args=query)
+            target=append_query_to_query_results, args=[query])
         threads.append(new_thread)
         new_thread.start()
 
     for thread in threads:
         thread.join()
 
+    if EXTRA_PRINTS_ACTIVE:
+        print(f'query_results = {query_results}')
+    if not query_results:
+        return list()
     final_result = set(query_results[0])
     for result in query_results[1:]:
         final_result = final_result.union(result)
@@ -125,9 +148,8 @@ exit_statements = ["EXIT PLZ", "GOODBYE QUERY"]
 def main():
 
     while True:
-        print(f'Please input your next query: ')
         try:
-            user_query = input()
+            user_query = input(f'Please input your next query: ')
             if user_query in exit_statements:
                 print("Bye bye.")
                 break
@@ -138,15 +160,35 @@ def main():
             print("Goodbye you little interuptee")
             break
 
-        curr_query_from_user: list[list[token]] = parse_queries(user_query)
-        print(f'{curr_query_from_user}')
-        query_results: list[Posting] = get_query_results_from_user_input(
-            curr_query_from_user)
+        # if TESTING:
+        #     print(f'{curr_query_from_user}')
 
-        query_links = [
-            curr_posting.doc_id for curr_posting in query_results[:MAX_LINKS_SHOWN]]
-        for link in query_links:
-            print(link)
+        #     print(f'Getting first query singlethreaded:')
+        #     single_threaded = get_query_results_and(curr_query_from_user[0])
+        #     print(f'{single_threaded}')
+        #     print(f'Getting first query multithreaded:', end='\t')
+
+        #     result = get_query_results_and_multithreaded(
+        #         curr_query_from_user[0])
+        #     print(f'{result}')
+        #     print(f'Got correct result: single = multi', end='\t')
+        #     print(f'{single_threaded == result}')
+        #     # query_results: list[Posting] = get_query_results_from_user_input(
+        #     #     curr_query_from_user)
+
+        parsed_user_input = parse_queries(user_query)
+        print(f'Parsed user query = {parsed_user_input}')
+        query_results = get_query_results_from_user_input(parsed_user_input)
+        if not query_results:
+            query_links = None
+        else:
+            query_links = [
+                curr_posting.doc_id for curr_posting in query_results[:MAX_LINKS_SHOWN]]
+        if not query_links:
+            print(f'No results found')
+        else:
+            for link in query_links:
+                print(link)
 
 
 if __name__ == "__main__":
