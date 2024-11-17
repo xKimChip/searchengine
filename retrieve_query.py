@@ -12,12 +12,12 @@ token = str
 
 EXTRA_PRINTS_ACTIVE: bool = False
 MAX_LINKS_SHOWN: int = 5
-TESTING: bool = True
+TESTING: bool = False
 
 
 def get_unpickled_document(pickle_file: str) -> Any:
-    with open(pickle_file, 'rb'):
-        return pickle.loads(pickle_file)
+    with open(pickle_file, 'rb') as opened_pickle_file:
+        return pickle.load(opened_pickle_file)
 
 
 if TESTING:
@@ -177,7 +177,8 @@ def main():
         #     #     curr_query_from_user)
 
         parsed_user_input = parse_queries(user_query)
-        print(f'Parsed user query = {parsed_user_input}')
+        if EXTRA_PRINTS_ACTIVE:
+            print(f'Parsed user query = {parsed_user_input}')
         query_results = get_query_results_from_user_input(parsed_user_input)
         if not query_results:
             query_links = None
