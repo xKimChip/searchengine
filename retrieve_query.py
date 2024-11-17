@@ -10,6 +10,9 @@ import threading
 token = str
 
 
+MAX_LINKS_SHOWN: int = 5
+
+
 def get_unpickled_document(pickle_file: str) -> Any:
     with open(pickle_file, 'rb'):
         return pickle.loads(pickle_file)
@@ -65,24 +68,31 @@ def get_query_results_and_multithreaded(query_terms: list[token]) -> list[Postin
 
 
 def parse_queries(query_list: list[token]) -> list[list[token]]:
-    result = list()
+    result: list[list[token]] = list()
     curr_query_list: list[token] = list()
-    for query in query_list:
-        if query == 'AND':
-            continue
-        elif query == 'OR':
-            result.append(curr_query_list)
-        else:
-            curr_query_list.append(query.lower())
-        # if query is AND, skip and keep appending to the same list
-        # if query is OR, append curr_query_list to result list and then 0 out curr_query_list
-        # go next
-        # else query is regular query, keep appending
+    for query in query_list.split():
+        match query:
+            case 'AND':
+                continue
+            case 'OR':
+                result.append(curr_query_list)
+                curr_query_list = list()
+            case _:
+                curr_query_list.append(query.lower())
+            # this should be altered when/if we take positioning into account
+            # currently any phrase together is still just two and statements
+
+    result.append(curr_query_list)
+
+    # if query is AND, skip and keep appending to the same list
+    # if query is OR, append curr_query_list to result list and then 0 out curr_query_list
+    # go next
+    # else query is regular query, keep appending
 
     return result
 
 
-def get_query_results_from_user_input(queries_list: list[list[token]]):
+def get_query_results_from_user_input(queries_list: list[list[token]]) -> list[Posting]:
     query_results: list[list[Posting]] = list()
     query_results_lock: threading.Lock = thread.Lock()
     threads: list[threading.Threads] = list()
@@ -115,6 +125,7 @@ exit_statements = ["EXIT PLZ", "GOODBYE QUERY"]
 def main():
 
     while True:
+        print(f'Please input your next query: ')
         try:
             user_query = input()
             if user_query in exit_statements:
@@ -122,3 +133,21 @@ def main():
                 break
         except EOFError:
             print("User entered Ctrl + D. Bye bye.")
+            break
+        except KeyboardInterrupt:
+            print("Goodbye you little interuptee")
+            break
+
+        curr_query_from_user: list[list[token]] = parse_queries(user_query)
+        print(f'{curr_query_from_user}')
+        query_results: list[Posting] = get_query_results_from_user_input(
+            curr_query_from_user)
+
+        query_links = [
+            curr_posting.doc_id for curr_posting in query_results[:MAX_LINKS_SHOWN]]
+        for link in query_links:
+            print(link)
+
+
+if __name__ == "__main__":
+    main()
