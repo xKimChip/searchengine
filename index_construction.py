@@ -18,6 +18,17 @@ class Posting:
         self.tf = tf
         self.tf_idf = tf_idf
 
+    def __repr__(self) -> str:
+        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+
+    def __str__(self) -> str:
+        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+
+    def __eq__(self, other):
+        return self.doc_id == other.doc_id
+
+    def __hash__(self):
+        return hash(self.doc_id)
 # Function to read JSON file
 
 
