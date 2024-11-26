@@ -1,5 +1,6 @@
 import globals 
 import nltk
+nltk.download('wordnet')
 lemma = nltk.wordnet.WordNetLemmatizer()
 
 def tokenize(text_content: str):

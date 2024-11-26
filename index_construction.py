@@ -87,11 +87,11 @@ def process_json_file(file_path):
     return (doc_id, term_frequencies)
 
 
-resulting_pickle_file_name = 'inverted_index.pkl'
-resulting_index_of_index = 'index_index.pkl'
+resulting_pickle_file_name = 'inverted_index.txt'
+resulting_index_of_index = 'index_index.txt'
 # Main execution block
 if __name__ == '__main__':
-    inverted_index = OrderedDict(list)
+    inverted_index = defaultdict(list)
     doc_freqs = defaultdict(int)  # Document frequencies
     doc_ids = set()  # Set of unique document IDs
 
@@ -141,25 +141,27 @@ if __name__ == '__main__':
             tf_idf = tf * idf
             posting = Posting(doc_id, tf, tf_idf)
             # if the first char of the token changes, add new index with the position.
-            
-            inverted_index[token].append(posting)
+            inverted_index[token] = posting
     
     line_count = 0
     last_char = '\0'
     ind_ind = defaultdict(int)
-    for token in inverted_index:
+    for token, value in inverted_index.items():
         
         if token[0] != last_char:
             last_char = token[0]
             ind_ind[last_char].append(line_count)
             
     with open(resulting_index_of_index, 'wb') as f:
-        pickle.dump(ind_ind,f)
+        for key, value in ind_ind.items():
+            f.write(f"{key}: {value}\n")
     
 
     # Save the inverted index to disk
     with open(resulting_pickle_file_name, 'wb') as f:
-        pickle.dump(inverted_index, f)
+        for key, value in inverted_index.items():
+            f.write(f"{key}: {value.__str__}\n")
+        
 
     # Get the size of the index file in KB
     index_size_kb = os.path.getsize(resulting_pickle_file_name) / 1024
