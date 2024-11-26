@@ -1,7 +1,7 @@
 import os
 import json
 from bs4 import BeautifulSoup
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from multiprocessing import Pool, cpu_count
 import math
 import pickle
@@ -88,9 +88,10 @@ def process_json_file(file_path):
 
 
 resulting_pickle_file_name = 'inverted_index.pkl'
+resulting_index_of_index = 'index_index.pkl'
 # Main execution block
 if __name__ == '__main__':
-    inverted_index = defaultdict(list)
+    inverted_index = OrderedDict(list)
     doc_freqs = defaultdict(int)  # Document frequencies
     doc_ids = set()  # Set of unique document IDs
 
@@ -133,12 +134,28 @@ if __name__ == '__main__':
         idf_values[token] = idf
 
     # Build the inverted index with tf-idf scores
+    
     for doc_id, term_frequencies in doc_term_freqs.items():
         for token, tf in term_frequencies.items():
             idf = idf_values[token]
             tf_idf = tf * idf
             posting = Posting(doc_id, tf, tf_idf)
+            # if the first char of the token changes, add new index with the position.
+            
             inverted_index[token].append(posting)
+    
+    line_count = 0
+    last_char = '\0'
+    ind_ind = defaultdict(int)
+    for token in inverted_index:
+        
+        if token[0] != last_char:
+            last_char = token[0]
+            ind_ind[last_char].append(line_count)
+            
+    with open(resulting_index_of_index, 'wb') as f:
+        pickle.dump(ind_ind,f)
+    
 
     # Save the inverted index to disk
     with open(resulting_pickle_file_name, 'wb') as f:
