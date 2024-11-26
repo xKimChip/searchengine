@@ -1,4 +1,6 @@
 import globals 
+import nltk
+lemma = nltk.wordnet.WordNetLemmatizer()
 
 def tokenize(text_content: str):
     tokens = []
@@ -18,7 +20,7 @@ def tokenize(text_content: str):
             else:
                 if token_chars:
                     token = ''.join(token_chars)
-                    tokens.append(token)
+                    tokens.append(lemma.lemmatize(token))
                     token_chars = []
                 # Reset the skipping flag after non-alphanumeric character
                 skipping_long_token = False

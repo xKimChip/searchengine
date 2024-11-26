@@ -6,6 +6,7 @@ from multiprocessing import Pool, cpu_count
 import math
 import pickle
 
+
 import globals
 from tokenizer import tokenize
 
@@ -74,7 +75,9 @@ def process_json_file(file_path):
     doc_id, html_content = read_json_file(file_path)
     if not html_content:
         return None
+    #print('CHECKPOINT 1')
     text = extract_text_from_html(html_content)
+    #print('CHECKPOINT 2')
     if not text.strip():
         return None
     tokens = tokenize(text)
