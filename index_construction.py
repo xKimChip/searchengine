@@ -5,10 +5,9 @@ from collections import OrderedDict, defaultdict
 from multiprocessing import Pool, cpu_count
 import math
 import pickle
-from nltk.stem import WordNetLemmatizer
+from nltk import WordNetLemmatizer
 
-
-import globals
+#import globals
 from tokenizer import tokenize
 
 
@@ -53,7 +52,7 @@ class Posting:
 # Function to read JSON file
 
 def assign_importance_to_tokens(soup_text, term_frequencies_dict):
-    lemma = WordNetLemmatizer()
+    lemma = nltk.wordnet.WordNetLemmatizer()
     
     for tag in soup_text.find_all():
         tag_text = re.split("[^a-zA-Z']+", tag.get_text().lower())
@@ -82,16 +81,16 @@ def read_json_file(file_path):
 # Function to extract text from HTML content
 
 
-def extract_text_from_html(html_content):
-    try:
-        soup = BeautifulSoup(html_content, 'lxml')
-        # Remove script and style elements
-        for script_or_style in soup(['script', 'style']):
-            script_or_style.decompose()
-        text = soup.get_text(separator=' ')
-        return text
-    except Exception:
-        return ''
+# def extract_text_from_html(html_content):
+#     try:
+#         soup = BeautifulSoup(html_content, 'html.parser')
+#         # Remove script and style elements
+#         for script_or_style in soup(['script', 'style']):
+#             script_or_style.decompose()
+#         text = soup.get_text(separator=' ')
+#         return text
+#     except Exception:
+#         return ''
 
 # Function to calculate term frequencies
 
@@ -110,7 +109,7 @@ def process_json_file(file_path):
     if not html_content:
         return None
     #text = extract_text_from_html(html_content)
-    soup = BeautifulSoup(html_content, 'lxml')
+    soup = BeautifulSoup(html_content, 'html.parser')
     
     tokens = tokenize(soup)
     if not tokens:
@@ -118,7 +117,7 @@ def process_json_file(file_path):
     term_frequencies = calculate_term_frequencies(tokens)
     
     #Assign a weight importance to each token
-    assign_importance_to_tokens(soup, term_frequencies)
+    #assign_importance_to_tokens(soup, term_frequencies)
     
     return (doc_id, term_frequencies)
 

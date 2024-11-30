@@ -3,6 +3,9 @@ import nltk
 nltk.download('wordnet')
 lemma = nltk.wordnet.WordNetLemmatizer()
 
+MAX_TOKEN_LENGTH = 10000
+
+
 def tokenize(text_content: str):
     tokens = []
     token_chars = []
@@ -14,7 +17,7 @@ def tokenize(text_content: str):
             if char.isascii() and char.isalnum():
                 if not skipping_long_token:
                     token_chars.append(char.lower())
-                    if len(token_chars) > globals.MAX_TOKEN_LENGTH:
+                    if len(token_chars) > MAX_TOKEN_LENGTH:
                         # Token is too long, skip it
                         token_chars = []
                         skipping_long_token = True  # Start skipping the rest of this token
