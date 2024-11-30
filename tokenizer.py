@@ -21,6 +21,7 @@ def tokenize(text_content: str):
             else:
                 if token_chars:
                     token = ''.join(token_chars)
+                    token = token.strip(" '")       #added strip to tokenizer
                     tokens.append(lemma.lemmatize(token))
                     token_chars = []
                 # Reset the skipping flag after non-alphanumeric character
@@ -29,7 +30,8 @@ def tokenize(text_content: str):
         # In case the text ends while we're in the middle of a token
         if token_chars and not skipping_long_token:
             token = ''.join(token_chars)
-            tokens.append(token)
+            token = token.strip(" '")       #added strip to tokenizer
+            tokens.append(lemma.lemmatize(token))
 
     except Exception as e:
         print(f"Unexpected error occurred during tokenization: {e}")

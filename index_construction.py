@@ -1,14 +1,34 @@
-import os
+import os, re
 import json
 from bs4 import BeautifulSoup
 from collections import OrderedDict, defaultdict
 from multiprocessing import Pool, cpu_count
 import math
 import pickle
+from nltk.stem import WordNetLemmatizer
 
 
 import globals
 from tokenizer import tokenize
+
+
+
+html_weight_multiplier = {
+    'title': 3,
+    'h1': 2,
+    'h2': 1.75,
+    'h3': 1.5,
+    'b': 1.25,
+    'strong': 1.25,
+    'a': 1.05,
+    'i': 1.05,
+    'em': 1.05,
+    'h5': 1.05,
+    'h6': 1.05,
+}
+
+
+
 
 # Posting class definition
 
@@ -32,6 +52,20 @@ class Posting:
         return hash(self.doc_id)
 # Function to read JSON file
 
+def assign_importance_to_tokens(soup_text, term_frequencies_dict):
+    lemma = WordNetLemmatizer()
+    
+    for tag in soup_text.find_all():
+        tag_text = re.split("[^a-zA-Z']+", tag.get_text().lower())
+        
+        for word in tag_text:
+            word = lemma.lemmatize(word.strip(" '"))
+
+            #This should be adding an importance weight multiplier if the word shows up in any of the html_weighted categories.
+            #May change to a multiplier for each category in the future, if the weights get too high.
+            if word in term_frequencies_dict:
+                term_frequencies_dict[word] *= html_weight_multiplier.get(tag.name, 1)
+        
 
 def read_json_file(file_path):
     try:
@@ -50,7 +84,7 @@ def read_json_file(file_path):
 
 def extract_text_from_html(html_content):
     try:
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'lxml')
         # Remove script and style elements
         for script_or_style in soup(['script', 'style']):
             script_or_style.decompose()
@@ -75,15 +109,17 @@ def process_json_file(file_path):
     doc_id, html_content = read_json_file(file_path)
     if not html_content:
         return None
-    #print('CHECKPOINT 1')
-    text = extract_text_from_html(html_content)
-    #print('CHECKPOINT 2')
-    if not text.strip():
-        return None
-    tokens = tokenize(text)
+    #text = extract_text_from_html(html_content)
+    soup = BeautifulSoup(html_content, 'lxml')
+    
+    tokens = tokenize(soup)
     if not tokens:
         return None
     term_frequencies = calculate_term_frequencies(tokens)
+    
+    #Assign a weight importance to each token
+    assign_importance_to_tokens(soup, term_frequencies)
+    
     return (doc_id, term_frequencies)
 
 
