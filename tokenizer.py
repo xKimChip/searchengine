@@ -1,6 +1,6 @@
-import globals 
+#import globals 
 import nltk
-nltk.download('wordnet')
+#nltk.download('wordnet')
 lemma = nltk.wordnet.WordNetLemmatizer()
 
 MAX_TOKEN_LENGTH = 10000
@@ -26,6 +26,7 @@ def tokenize(text_content: str):
                     token = ''.join(token_chars)
                     token = token.strip(" '")       #added strip to tokenizer
                     tokens.append(lemma.lemmatize(token))
+                    #tokens.append(token)
                     token_chars = []
                 # Reset the skipping flag after non-alphanumeric character
                 skipping_long_token = False
@@ -35,6 +36,7 @@ def tokenize(text_content: str):
             token = ''.join(token_chars)
             token = token.strip(" '")       #added strip to tokenizer
             tokens.append(lemma.lemmatize(token))
+            #tokens.append(token)
 
     except Exception as e:
         print(f"Unexpected error occurred during tokenization: {e}")

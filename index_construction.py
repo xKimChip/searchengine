@@ -33,15 +33,17 @@ global doc_count
 
 class Posting:
     def __init__(self, doc_id, tf, tf_idf):
+    #def __init__(self, doc_id: set, tf, tf_idf, weight):
         self.doc_id = doc_id
         self.tf = tf
         self.tf_idf = tf_idf
+        #self.weight = weight
 
     def __repr__(self) -> str:
         return f'{self.doc_id} {self.tf} {self.tf_idf}'
 
     def __str__(self) -> str:
-        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+         return f'{self.doc_id} {self.tf} {self.tf_idf}'
 
     def __eq__(self, other):
         return self.doc_id == other.doc_id
@@ -54,7 +56,8 @@ def assign_importance_to_tokens(soup_text, term_frequencies_dict):
     lemma = WordNetLemmatizer()
     
     for tag in soup_text.find_all():
-        tag_text = re.split("[^a-zA-Z']+", tag.get_text().lower())
+        # Regex to split on tokens pretty much.
+        tag_text = re.split("[^a-zA-Z0-9']+", tag.get_text().lower())
         
         for word in tag_text:
             word = lemma.lemmatize(word.strip(" '"))
@@ -136,7 +139,7 @@ resulting_pickle_file_name = 'inverted_index.txt'
 resulting_index_of_index = 'index_index.txt'
 # Main execution block
 if __name__ == '__main__':
-    inverted_index = defaultdict(list)
+    inverted_index = defaultdict(Posting)
     doc_freqs = defaultdict(int)  # Document frequencies
     doc_ids = set()  # Set of unique document IDs
     doc_id_map = defaultdict()
@@ -185,35 +188,51 @@ if __name__ == '__main__':
         idf = math.log(doc_count / df)
         idf_values[token] = idf
 
-    # Build the inverted index with tf-idf scores
+    #Redo the inverted index to have all doc id's in the set of doc_ids
     
+    
+    
+    # Build the inverted index with tf-idf scores
     for doc_id, term_frequencies in doc_term_freqs.items():
         for token, tf in term_frequencies.items():
             idf = idf_values[token]
             tf_idf = tf * idf
             posting = Posting(doc_id, tf, tf_idf)
             # if the first char of the token changes, add new index with the position.
-            inverted_index[token] = posting
+            if token not in inverted_index:
+                new_posting_list = [posting]
+                inverted_index[token] = new_posting_list
+            else:
+                inverted_index[token].append(posting) #possibly words for the ordered dict?
+            #inverted_index[token].append(posting)
+            
+    #sort the inverted index
+    sorted_items = sorted(inverted_index.items(), key=lambda item: item[0])
+    sorted_inverted_index = dict(sorted_items)
     
     #Build the index of the index
     line_count = 0
     last_char = '\0'
-    ind_ind = defaultdict(int)
+    #ind_ind = defaultdict(char)
     # for token, value in inverted_index.items():
         
     #     if token[0] != last_char:
     #         last_char = token[0]
-    #         ind_ind[last_char] = line_count
+    #         ind_ind[last_char] = token
             
-    with open(resulting_index_of_index, 'w') as f:
-        for key, value in ind_ind.items():
-            f.write(f"{key}: {value}\n")
+    # with open(resulting_index_of_index, 'w') as f:
+    #     for key, value in ind_ind.items():
+    #         f.write(f"{key}: {value}\n")
     
 
     # Save the inverted index to disk
+    # with open(resulting_pickle_file_name, 'wb') as f:
+    #     pickle.dump(inverted_index, f)
+
+    # Save the inverted index to disk
     with open(resulting_pickle_file_name, 'w') as f:
-        for key, value in inverted_index.items():
-            f.write(f"{key}: doc_id= {value.doc_id}, tf= {value.tf}, tf-idf= {value.tf_idf}\n")
+        for key, value in sorted_inverted_index.items():
+            f.write(f"{key}: {value}\n")
         
 
     # Get the size of the index file in KB
