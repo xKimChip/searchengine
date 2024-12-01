@@ -11,8 +11,7 @@ from nltk import WordNetLemmatizer
 from tokenizer import tokenize
 
 
-
-html_weight_multiplier = {
+HTML_WEIGHT_MULTIPLIER = {
     'title': 3,
     'h1': 2,
     'h2': 1.75,
@@ -26,7 +25,7 @@ html_weight_multiplier = {
     'h6': 1.05,
 }
 
-
+global doc_count
 
 
 # Posting class definition
@@ -52,7 +51,7 @@ class Posting:
 # Function to read JSON file
 
 def assign_importance_to_tokens(soup_text, term_frequencies_dict):
-    lemma = nltk.wordnet.WordNetLemmatizer()
+    lemma = WordNetLemmatizer()
     
     for tag in soup_text.find_all():
         tag_text = re.split("[^a-zA-Z']+", tag.get_text().lower())
@@ -63,7 +62,7 @@ def assign_importance_to_tokens(soup_text, term_frequencies_dict):
             #This should be adding an importance weight multiplier if the word shows up in any of the html_weighted categories.
             #May change to a multiplier for each category in the future, if the weights get too high.
             if word in term_frequencies_dict:
-                term_frequencies_dict[word] *= html_weight_multiplier.get(tag.name, 1)
+                term_frequencies_dict[word] *= HTML_WEIGHT_MULTIPLIER.get(tag.name, 1)
         
 
 def read_json_file(file_path):
@@ -72,6 +71,11 @@ def read_json_file(file_path):
             data = json.load(f)
         url = data.get('url')
         content = data.get('content')
+        
+        #url = data.at_pointer(b'/url').decode()
+        #content = data.at_pointer(b'/content').decode()
+
+        
         if not url or not content:
             return None, None
         return url, content
@@ -87,7 +91,7 @@ def read_json_file(file_path):
 #         # Remove script and style elements
 #         for script_or_style in soup(['script', 'style']):
 #             script_or_style.decompose()
-#         text = soup.get_text(separator=' ')
+#         text = soup.get_text(separator=' ').lower
 #         return text
 #     except Exception:
 #         return ''
@@ -97,29 +101,35 @@ def read_json_file(file_path):
 
 def calculate_term_frequencies(tokens):
     tf_dict = defaultdict(int)
+    total_terms = len(tokens)
     for token in tokens:
-        tf_dict[token] += 1
+        tf_dict[token] += 1 / total_terms
+    
     return tf_dict
 
 # Function to process a single JSON file and return doc_id and term frequencies
 
-
 def process_json_file(file_path):
-    doc_id, html_content = read_json_file(file_path)
+
+    doc_url, html_content = read_json_file(file_path)
     if not html_content:
         return None
-    #text = extract_text_from_html(html_content)
-    soup = BeautifulSoup(html_content, 'html.parser')
     
-    tokens = tokenize(soup)
+    
+    #soup = extract_text_from_html(html_content)
+    soup = BeautifulSoup(html_content, 'lxml')
+    
+    text = soup.get_text(separator=' ').lower()
+    
+    tokens = tokenize(text)
     if not tokens:
         return None
     term_frequencies = calculate_term_frequencies(tokens)
     
     #Assign a weight importance to each token
     #assign_importance_to_tokens(soup, term_frequencies)
-    
-    return (doc_id, term_frequencies)
+
+    return (doc_url, term_frequencies)
 
 
 resulting_pickle_file_name = 'inverted_index.txt'
@@ -129,7 +139,8 @@ if __name__ == '__main__':
     inverted_index = defaultdict(list)
     doc_freqs = defaultdict(int)  # Document frequencies
     doc_ids = set()  # Set of unique document IDs
-
+    doc_id_map = defaultdict()
+    
     # Path to the directory you want to process
     directory_to_process = os.path.join('DEV')
     file_paths = []
@@ -151,21 +162,27 @@ if __name__ == '__main__':
     # Collect term frequencies and document frequencies
     doc_term_freqs = {}  # {doc_id: {token: tf}}
 
+    doc_count = 0
     for result in results:
         if result is None:
             continue
-        doc_id, term_frequencies = result
-        doc_ids.add(doc_id)
+        doc_url, term_frequencies = result
+        doc_id = doc_count
+        doc_id_map[doc_id] = doc_url
+        #doc_ids.add(doc_id)
         doc_term_freqs[doc_id] = term_frequencies
+        
         for token in term_frequencies.keys():
             doc_freqs[token] += 1  # Increment document frequency for the token
+        
+        doc_count += 1
 
-    total_docs = len(doc_ids)  # Total number of documents
+    #total_docs = len(doc_ids)  # Total number of documents
 
     # Calculate idf values
     idf_values = {}
     for token, df in doc_freqs.items():
-        idf = math.log(total_docs / df)
+        idf = math.log(doc_count / df)
         idf_values[token] = idf
 
     # Build the inverted index with tf-idf scores
@@ -178,24 +195,25 @@ if __name__ == '__main__':
             # if the first char of the token changes, add new index with the position.
             inverted_index[token] = posting
     
+    #Build the index of the index
     line_count = 0
     last_char = '\0'
     ind_ind = defaultdict(int)
-    for token, value in inverted_index.items():
+    # for token, value in inverted_index.items():
         
-        if token[0] != last_char:
-            last_char = token[0]
-            ind_ind[last_char].append(line_count)
+    #     if token[0] != last_char:
+    #         last_char = token[0]
+    #         ind_ind[last_char] = line_count
             
-    with open(resulting_index_of_index, 'wb') as f:
+    with open(resulting_index_of_index, 'w') as f:
         for key, value in ind_ind.items():
             f.write(f"{key}: {value}\n")
     
 
     # Save the inverted index to disk
-    with open(resulting_pickle_file_name, 'wb') as f:
+    with open(resulting_pickle_file_name, 'w') as f:
         for key, value in inverted_index.items():
-            f.write(f"{key}: {value.__str__}\n")
+            f.write(f"{key}: doc_id= {value.doc_id}, tf= {value.tf}, tf-idf= {value.tf_idf}\n")
         
 
     # Get the size of the index file in KB
@@ -203,6 +221,6 @@ if __name__ == '__main__':
 
     # Display the analytics
     print("\n=== Index Analytics ===")
-    print(f"Number of indexed documents: {total_docs}")
+    print(f"Number of indexed documents: {doc_count}")
     print(f"Number of unique tokens: {len(inverted_index)}")
     print(f"Total size of the index on disk: {index_size_kb:.2f} KB")
