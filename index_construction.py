@@ -7,9 +7,11 @@ import math
 import pickle
 from nltk import WordNetLemmatizer
 
+
 #import globals
 from tokenizer import tokenize
 
+MAX_INDEX_SIZE = 500000
 
 HTML_WEIGHT_MULTIPLIER = {
     'title': 3,
@@ -102,13 +104,13 @@ def read_json_file(file_path):
 # Function to calculate term frequencies
 
 
-def calculate_term_frequencies(tokens):
-    tf_dict = defaultdict(int)
-    total_terms = len(tokens)
-    for token in tokens:
-        tf_dict[token] += 1 / total_terms
+# def calculate_term_frequencies(tokens):
+#     tf_dict = defaultdict(int)
+#     total_terms = len(tokens)
+#     for token in tokens:
+#         tf_dict[token] += 1 / total_terms
     
-    return tf_dict
+#     return tf_dict
 
 # Function to process a single JSON file and return doc_id and term frequencies
 
@@ -129,6 +131,9 @@ def process_json_file(file_path):
         return None
     term_frequencies = calculate_term_frequencies(tokens)
     
+    #if (sys.getsizeof(index) > MAX_INDEX_SIZE):
+    #   write_partial_idx() 
+    
     #Assign a weight importance to each token
     #assign_importance_to_tokens(soup, term_frequencies)
 
@@ -139,7 +144,7 @@ resulting_pickle_file_name = 'inverted_index.txt'
 resulting_index_of_index = 'index_index.txt'
 # Main execution block
 if __name__ == '__main__':
-    inverted_index = defaultdict(Posting)
+    inverted_index = defaultdict(list)
     doc_freqs = defaultdict(int)  # Document frequencies
     doc_ids = set()  # Set of unique document IDs
     doc_id_map = defaultdict()

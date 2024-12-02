@@ -2,7 +2,7 @@ import os, sys, re
 import json
 from bs4 import BeautifulSoup
 from collections import OrderedDict, defaultdict
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, Lock
 import math
 import pickle
 from nltk import WordNetLemmatizer
@@ -10,13 +10,14 @@ from helpers import *
 #import globals
 from tokenizer import tokenize
 
-MAX_INDEX_SIZE = 100000000 # Should be about 200MB
+MAX_INDEX_SIZE = 10000000#0 # Should be about 200MB
 partialidx_count = 1
 
 resulting_txt_IOI = 'index_index.txt'
 resulting_pickle_IOI = 'index_index.pkl'
 
-PICKLE = True
+PICKLE = False
+MULTI_PROC = True
 
 
 #Posting class definition
@@ -49,30 +50,30 @@ class Posting:
 
 
 iIndex = defaultdict(list)
-doc_id_map = defaultdict()
+doc_id_map = list()
 doc_count = 0
 
-    
+index_lock = Lock()
+id_lock = Lock()
+
     
     
 # Function to read JSON file
 def read_json_file(file_path):
-    global doc_count
+    #global doc_count
     try:
         with open(file_path, 'r', encoding='ascii') as f:
             data = json.load(f)
         url = data.get('url')
         content = data.get('content')
         # For multithreading, might put this under the html check and add a lock
-        doc_id = doc_count
-        doc_count += 1
-        
-        #url = data.at_pointer(b'/url').decode()
-        #content = data.at_pointer(b'/content').decode()
+        with id_lock:
+            doc_id = len(doc_id_map)
+            doc_id_map.append(url)
 
         
         if not url or not content:
-            return None, None
+            return None, None, None
         return url, content, doc_id
     except Exception:
         return None, None
@@ -89,7 +90,7 @@ def process_json_file(file_path):
     doc_url, html_content, cur_doc_id = read_json_file(file_path)
     if not html_content:
         return None
-    doc_id_map[cur_doc_id] = doc_url
+    
     
     soup = BeautifulSoup(html_content, 'lxml')
     
@@ -107,12 +108,10 @@ def process_json_file(file_path):
         tf = term_frequencies[term]
         weight = term_weights[term]
         new_post = Posting(cur_doc_id, tf, weight)
-        iIndex[term].append(new_post)
-    
-
-    
-    if (sys.getsizeof(iIndex) > MAX_INDEX_SIZE):
-        write_partialidx()
+        with index_lock:
+            iIndex[term].append(new_post)
+            if (sys.getsizeof(iIndex) > MAX_INDEX_SIZE):
+                write_partialidx()
 
 
         
@@ -146,6 +145,7 @@ def merge_partialidx(partialidx):
 # Main execution block
 if __name__ == '__main__':
     # Path to the directory you want to process
+    #global partialidx_count
     directory_to_process = os.path.join('DEV')
     file_paths = []
     if os.path.exists(directory_to_process):
@@ -158,74 +158,22 @@ if __name__ == '__main__':
         print(f"The directory {directory_to_process} does not exist.")
         exit(1)
 
-    # # Multiprocessing
-    # num_workers = cpu_count()
-    # with Pool(num_workers) as pool:
-    #     pool.map(process_json_file, file_paths)
-
-
-    for file in file_paths:
-        process_json_file(file)
+    if MULTI_PROC:
+        print('THREADING TIME!')
+        with Pool() as pool:
+            pool.map(process_json_file, file_paths)
+    else:  
+        for file in file_paths:
+            process_json_file(file)
     
     if not iIndex:
         #Write the remainder
+        
+        print(partialidx_count)
         write_partialidx()
     
     print('All files processed, Commence merging process.')
 
-
-
-
-
-    # # Multiprocessing
-    # num_workers = cpu_count()
-    # with Pool(num_workers) as pool:
-    #     results = pool.map(process_json_file, file_paths)
-
-    # Collect term frequencies and document frequencies
-    #doc_term_freqs = {}  # {doc_id: {token: tf}}
-
-    # doc_count = 0
-    # for result in results:
-    #     if result is None:
-    #         continue
-    #     doc_url, term_frequencies = result
-    #     doc_id = doc_count
-    #     doc_id_map[doc_id] = doc_url
-    #     #doc_ids.add(doc_id)
-    #     doc_term_freqs[doc_id] = term_frequencies
-        
-    #     for token in term_frequencies.keys():
-    #         doc_freqs[token] += 1  # Increment document frequency for the token
-        
-    #     doc_count += 1
-
-    #total_docs = len(doc_ids)  # Total number of documents
-
-    # Calculate idf values
-    # idf_values = {}
-    # for token, df in doc_freqs.items():
-    #     idf = math.log(doc_count / df)
-    #     idf_values[token] = idf
-
-    #Redo the inverted index to have all doc id's in the set of doc_ids
-    
-    
-    
-    # Build the inverted index with tf-idf scores
-    # for doc_id, term_frequencies in doc_term_freqs.items():
-    #     for token, tf in term_frequencies.items():
-    #         idf = idf_values[token]
-    #         tf_idf = tf * idf
-    #         posting = Posting(doc_id, tf, tf_idf)
-    #         # if the first char of the token changes, add new index with the position.
-    #         if token not in inverted_index:
-    #             new_posting_list = [posting]
-    #             inverted_index[token] = new_posting_list
-    #         else:
-    #             inverted_index[token].append(posting) #possibly words for the ordered dict?
-            #inverted_index[token].append(posting)
-            
     #sort the inverted index
     # sorted_items = sorted(inverted_index.items(), key=lambda item: item[0])
     # sorted_inverted_index = dict(sorted_items)
@@ -245,18 +193,6 @@ if __name__ == '__main__':
     #         f.write(f"{key}: {value}\n")
     
 
-    # Save the inverted index to disk
-    # with open(resulting_pickle_file_name, 'wb') as f:
-    #     pickle.dump(inverted_index, f)
-
-    # Save the inverted index to disk
-    # with open(resulting_pickle_file_name, 'w') as f:
-    #     for key, value in sorted_inverted_index.items():
-    #         f.write(f"{key}: {value}\n")
-        
-
-    # Get the size of the index file in KB
-    #index_size_kb = os.path.getsize(resulting_pickle_file_name) / 1024
 
     # Display the analytics
     print("\n=== Index Analytics ===")
