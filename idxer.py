@@ -2,7 +2,9 @@ import os, sys, re
 import json
 from bs4 import BeautifulSoup
 from collections import OrderedDict, defaultdict
-from multiprocessing import Pool, cpu_count, Lock
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+import concurrent.futures
 import math
 import pickle
 from nltk import WordNetLemmatizer
@@ -28,6 +30,9 @@ class Posting:
         self.tf = tf
         self.weight = weight
         self.tf_idf = 0
+    
+    def __del__(self):
+        return
 
     def __repr__(self) -> str:
         return f'{self.doc_id} {self.tf} {self.weight} {self.tf_idf}'
@@ -86,7 +91,7 @@ def read_json_file(file_path):
 # Function to process a single JSON file and return doc_id and term frequencies
 
 def process_json_file(file_path):
-    
+    global iIndex
     doc_url, html_content, cur_doc_id = read_json_file(file_path)
     if not html_content:
         return None
@@ -118,6 +123,7 @@ def process_json_file(file_path):
 # Save the inverted index to disk
 def write_partialidx():
     global partialidx_count
+    global iIndex
 
     if PICKLE:
         resulting_pickle_file_name = f'results/inverted_index{partialidx_count}.pkl'
@@ -140,10 +146,7 @@ def merge_partialidx(partialidx):
     filename = f'results/{partialidx}'
     
     
-
-
-# Main execution block
-if __name__ == '__main__':
+def main():
     # Path to the directory you want to process
     #global partialidx_count
     directory_to_process = os.path.join('DEV')
@@ -160,16 +163,14 @@ if __name__ == '__main__':
 
     if MULTI_PROC:
         print('THREADING TIME!')
-        with Pool() as pool:
-            pool.map(process_json_file, file_paths)
+        with ThreadPoolExecutor() as executor:
+            executor.map(process_json_file, file_paths)
     else:  
         for file in file_paths:
             process_json_file(file)
     
     if not iIndex:
         #Write the remainder
-        
-        print(partialidx_count)
         write_partialidx()
     
     print('All files processed, Commence merging process.')
@@ -199,3 +200,7 @@ if __name__ == '__main__':
     print(f"Number of indexed documents: {doc_count}")
     print(f"Number of unique tokens: {len(iIndex)}")
     #print(f"Total size of the index on disk: {index_size_kb:.2f} KB")
+
+# Main execution block
+if __name__ == '__main__':
+    main()
