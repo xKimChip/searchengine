@@ -10,13 +10,13 @@ from helpers import *
 #import globals
 from tokenizer import tokenize
 
-MAX_INDEX_SIZE = 500000
+MAX_INDEX_SIZE = 100000000 # Should be about 200MB
 partialidx_count = 1
 
 resulting_txt_IOI = 'index_index.txt'
 resulting_pickle_IOI = 'index_index.pkl'
 
-PICKLE = 0
+PICKLE = True
 
 
 #Posting class definition
@@ -29,10 +29,10 @@ class Posting:
         self.tf_idf = 0
 
     def __repr__(self) -> str:
-        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+        return f'{self.doc_id} {self.tf} {self.weight} {self.tf_idf}'
 
     def __str__(self) -> str:
-         return f'{self.doc_id} {self.tf} {self.tf_idf}'
+         return f'{self.doc_id} {self.tf} {self.weight} {self.tf_idf}'
 
     def __eq__(self, other):
         return self.doc_id == other.doc_id
@@ -47,15 +47,8 @@ class Posting:
         tfidf_score = self.tf * idf_score
         self.update_tfidf(tfidf_score)
 
-# Posting = {
-#     "doc_id": 
-    
-# }
 
-    # def update_weight(self, weighting):
-    #     self.weight = weighting
-
-iIndex = defaultdict(Posting)
+iIndex = defaultdict(list)
 doc_id_map = defaultdict()
 doc_count = 0
 
@@ -64,11 +57,15 @@ doc_count = 0
     
 # Function to read JSON file
 def read_json_file(file_path):
+    global doc_count
     try:
         with open(file_path, 'r', encoding='ascii') as f:
             data = json.load(f)
         url = data.get('url')
         content = data.get('content')
+        # For multithreading, might put this under the html check and add a lock
+        doc_id = doc_count
+        doc_count += 1
         
         #url = data.at_pointer(b'/url').decode()
         #content = data.at_pointer(b'/content').decode()
@@ -76,7 +73,7 @@ def read_json_file(file_path):
         
         if not url or not content:
             return None, None
-        return url, content
+        return url, content, doc_id
     except Exception:
         return None, None
 
@@ -88,11 +85,8 @@ def read_json_file(file_path):
 # Function to process a single JSON file and return doc_id and term frequencies
 
 def process_json_file(file_path):
-    global doc_count
     
-    
-    cur_doc_id = doc_count
-    doc_url, html_content = read_json_file(file_path)
+    doc_url, html_content, cur_doc_id = read_json_file(file_path)
     if not html_content:
         return None
     doc_id_map[cur_doc_id] = doc_url
@@ -115,29 +109,25 @@ def process_json_file(file_path):
         new_post = Posting(cur_doc_id, tf, weight)
         iIndex[term].append(new_post)
     
-    # For multithreading, might put this under the html check and add a lock
-    doc_count += 1
+
     
     if (sys.getsizeof(iIndex) > MAX_INDEX_SIZE):
         write_partialidx()
 
 
         
-    
-        
-        
 # Save the inverted index to disk
 def write_partialidx():
     global partialidx_count
 
     if PICKLE:
-        resulting_pickle_file_name = f'inverted_index{partialidx_count}.pkl'
+        resulting_pickle_file_name = f'results/inverted_index{partialidx_count}.pkl'
 
         
         with open(resulting_pickle_file_name, 'wb') as f:
             pickle.dump(iIndex, f)
     else:
-        resulting_txt_file_name = f'inverted_index{partialidx_count}.txt'
+        resulting_txt_file_name = f'results/inverted_index{partialidx_count}.txt'
         
         with open(resulting_txt_file_name, 'w') as f:
             for key, value in iIndex.items():
@@ -146,6 +136,11 @@ def write_partialidx():
     iIndex.clear()
     partialidx_count += 1
             
+            
+def merge_partialidx(partialidx):
+    filename = f'results/{partialidx}'
+    
+    
 
 
 # Main execution block
@@ -162,6 +157,12 @@ if __name__ == '__main__':
     else:
         print(f"The directory {directory_to_process} does not exist.")
         exit(1)
+
+    # # Multiprocessing
+    # num_workers = cpu_count()
+    # with Pool(num_workers) as pool:
+    #     pool.map(process_json_file, file_paths)
+
 
     for file in file_paths:
         process_json_file(file)

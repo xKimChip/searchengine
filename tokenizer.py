@@ -14,7 +14,7 @@ def tokenize(text_content: str):
     try:
         for char in text_content:
             # Only consider ASCII alphanumeric characters.
-            if char.isascii() and char.isalnum():
+            if char.isascii() and char.isalnum() or char == '\'':
                 if not skipping_long_token:
                     token_chars.append(char.lower())
                     if len(token_chars) > MAX_TOKEN_LENGTH:
