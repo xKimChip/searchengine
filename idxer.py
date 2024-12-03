@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 import math
 import pickle
+import shelve
 from nltk import WordNetLemmatizer
 from helpers import *
 #import globals
@@ -145,6 +146,22 @@ def write_partialidx():
             
 def merge_partialidx(partialidx):
     filename = f'results/{partialidx}'
+    with open(filename) as file:
+        pidx_json = json.load(file)
+        
+    index_char_file = '0.txt'
+    with open(index_char_file) as file:
+        load = 
+        
+    for token in pidx_json.keys():
+        char_file = f'{token[0].txt}'
+        
+        if index_char_file != char_file:
+            
+            index_char_file = char_file
+            
+            
+    
     
     
 def main():
@@ -172,6 +189,8 @@ def main():
             if len(doc_id_map) > MAX_INDEX_SIZE * partialidx_count:
                 write_partialidx()
         write_partialidx()    
+        with open('results/id_map.json', 'w+') as file:
+            json.dump(doc_id_map, file)
 
         
     
