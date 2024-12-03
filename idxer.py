@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-import concurrent.futures
 import math
 import pickle
 from nltk import WordNetLemmatizer
@@ -12,14 +11,15 @@ from helpers import *
 #import globals
 from tokenizer import tokenize
 
-MAX_INDEX_SIZE = 10000000#0 # Should be about 200MB
+#MAX_INDEX_SIZE = 20000000
+MAX_INDEX_SIZE = 18000
 partialidx_count = 1
 
 resulting_txt_IOI = 'index_index.txt'
 resulting_pickle_IOI = 'index_index.pkl'
 
 PICKLE = False
-MULTI_PROC = True
+MULTI_PROC = False
 
 
 #Posting class definition
@@ -115,8 +115,8 @@ def process_json_file(file_path):
         new_post = Posting(cur_doc_id, tf, weight)
         with index_lock:
             iIndex[term].append(new_post)
-            if (sys.getsizeof(iIndex) > MAX_INDEX_SIZE):
-                write_partialidx()
+            # if (sys.getsizeof(iIndex) > MAX_INDEX_SIZE):
+            #     write_partialidx()
 
 
         
@@ -124,22 +124,23 @@ def process_json_file(file_path):
 def write_partialidx():
     global partialidx_count
     global iIndex
+    
 
     if PICKLE:
         resulting_pickle_file_name = f'results/inverted_index{partialidx_count}.pkl'
 
         
         with open(resulting_pickle_file_name, 'wb') as f:
-            pickle.dump(iIndex, f)
+            pickle.dump(sorted(iIndex), f)
     else:
         resulting_txt_file_name = f'results/inverted_index{partialidx_count}.txt'
         
         with open(resulting_txt_file_name, 'w') as f:
-            for key, value in iIndex.items():
+            for key, value in sorted(iIndex.items()):
                 f.write(f"{key}: {value}\n")
                 
-    iIndex.clear()
     partialidx_count += 1
+    iIndex.clear()
             
             
 def merge_partialidx(partialidx):
@@ -168,10 +169,11 @@ def main():
     else:  
         for file in file_paths:
             process_json_file(file)
-    
-    if not iIndex:
-        #Write the remainder
-        write_partialidx()
+            if len(doc_id_map) > MAX_INDEX_SIZE * partialidx_count:
+                write_partialidx()
+        write_partialidx()    
+
+        
     
     print('All files processed, Commence merging process.')
 
@@ -197,7 +199,7 @@ def main():
 
     # Display the analytics
     print("\n=== Index Analytics ===")
-    print(f"Number of indexed documents: {doc_count}")
+    print(f"Number of indexed documents: {len(doc_id_map)}")
     print(f"Number of unique tokens: {len(iIndex)}")
     #print(f"Total size of the index on disk: {index_size_kb:.2f} KB")
 
