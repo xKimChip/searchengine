@@ -143,24 +143,25 @@ def write_partialidx():
     partialidx_count += 1
     iIndex.clear()
             
-            
+#May switch to shelve
 def merge_partialidx(partialidx):
     filename = f'results/{partialidx}'
     with open(filename) as file:
-        pidx_json = json.load(file)
+        pidx_json = pickle.load(file)
         
-    index_char_file = '0.txt'
-    with open(index_char_file) as file:
-        load = 
+    cur_char_file = '0.pkl'
+    with open(f'results/{cur_char_file}') as file:
+        load = pickle.load(file)
         
     for token in pidx_json.keys():
-        char_file = f'{token[0].txt}'
+        char_file = f'{token[0]}.pkl'
         
         if index_char_file != char_file:
             
             index_char_file = char_file
             
-            
+            with open(f'results/{char_file}') as f:
+                load = pickle.load(f)
     
     
     
@@ -189,7 +190,7 @@ def main():
             if len(doc_id_map) > MAX_INDEX_SIZE * partialidx_count:
                 write_partialidx()
         write_partialidx()    
-        with open('results/id_map.json', 'w+') as file:
+        with open('results/id_map.pkl', 'w+') as file:
             json.dump(doc_id_map, file)
 
         
