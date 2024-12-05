@@ -157,12 +157,15 @@ def merge_partialidx(partialidx):
         char_file = f'{token[0]}.pkl'
         
         if index_char_file != char_file:
+            #dump json from memory into old index_file
             
             index_char_file = char_file
             
             with open(f'results/{char_file}') as f:
                 load = pickle.load(f)
-    
+
+        # Should be adding the union of the loaded file and the partial index file.
+        load[token] += pidx_json[token]
     
     
 def main():
