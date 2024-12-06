@@ -6,7 +6,33 @@ OUTPUT_DIR = 'index_files'
 postings_file_path = os.path.join(OUTPUT_DIR, 'inverted_index_postings.txt')
 dict_file_path = os.path.join(OUTPUT_DIR, 'inverted_index_dict.pkl')
 docmap_file_path = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
-
+stop_list = set(
+    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your',
+    'yours', 'yourself', 'yourselves', 'he', 'him',
+    'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
+    'they', 'them', 'their', 'theirs', 'themselves',
+    'what', 'which', 'who', 'whom', 'this',
+    'that', 'these', 'those', 'am', 'is',
+    'are', 'was', 'were', 'be', 'been',
+    'being', 'have'',', 'has', 'had', 'having',
+    'do', 'does', 'did', 'doing', 'a',
+    'an', 'the', 'and', 'but', 'if',
+    'or', 'because', 'as', 'until', 'while',
+    'of', 'at', 'by', 'for', 'with',
+    'about', 'against', 'between', 'into', 'through',
+    'during', 'before', 'after', 'above', 'below',
+    'to', 'from', 'up', 'down', 'in',
+    'out', 'on', 'off', 'over', 'under',
+    'again', 'further', 'then', 'once', 'here',
+    'there', 'when', 'where', 'why', 'how',
+    'all', 'any', 'both', 'each', 'few',
+    'more', 'most', 'other', 'some', 'such',
+    'no', 'nor', 'not', 'only', 'own',
+    'same', 'so', 'than', 'too', 'very',
+    's', 't', 'can', 'will', 'just',
+    'don', 'should', 'now'
+)
+# stop word list stolen blatantly from https://gist.github.com/sebleier/554280
 # Load dictionary and doc_id_map
 with open(dict_file_path, 'rb') as f:
     term_dict = pickle.load(f)
@@ -14,12 +40,14 @@ with open(dict_file_path, 'rb') as f:
 with open(docmap_file_path, 'rb') as f:
     doc_id_map = pickle.load(f)
 
+
 def tokenize_query(query):
     from nltk.stem.porter import PorterStemmer
     stemmer = PorterStemmer()
     tokens = query.lower().split()
-    tokens = [stemmer.stem(t) for t in tokens]
+    tokens = [stemmer.stem(t) for t in tokens if t not in stop_list]
     return tokens
+
 
 def get_postings_for_term(term):
     # Check if term in dictionary
@@ -45,6 +73,7 @@ def get_postings_for_term(term):
             tfidf_float = float(tfidf_str)
             postings.append((doc_id_int, tfidf_float))
         return postings
+
 
 def query_and(tokens):
     # Retrieve postings for each token and intersect
@@ -73,6 +102,7 @@ def query_and(tokens):
     results.sort(key=lambda x: x[1], reverse=True)
     return results
 
+
 def main():
     while True:
         query = input("Enter query (type 'exit' to quit): ").strip()
@@ -86,6 +116,7 @@ def main():
             # Print top 5 results
             for doc_id, score in results[:5]:
                 print(f"{doc_id_map[doc_id]} (score: {score})")
+
 
 if __name__ == "__main__":
     main()
