@@ -1,196 +1,91 @@
-# Once you have built the inverted index, you are ready to test document retrieval with queries. At the very least, the search should be able to deal with boolean queries: AND only. If you wish, you can sort the retrieved documents based on tf-idf scoring (you are not required to do so now, but it will be required for the final search engine). This can be done using the cosine similarity method. Feel free to use a library to compute cosine similarity once you have the term frequencies and inverse document frequencies (although it should be very easy for you to write your own implementation).
-#  You may also add other weighting/scoring mechanisms to help refine the search results.
-
 import pickle
-from typing import Any
-from index_construction import resulting_pickle_file_name, Posting
-from multiprocessing import Pool, cpu_count
-import threading
+import os
 
-token = str
+# CONFIGURATION
+OUTPUT_DIR = 'index_files'
+postings_file_path = os.path.join(OUTPUT_DIR, 'inverted_index_postings.txt')
+dict_file_path = os.path.join(OUTPUT_DIR, 'inverted_index_dict.pkl')
+docmap_file_path = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
 
+# Load dictionary and doc_id_map
+with open(dict_file_path, 'rb') as f:
+    term_dict = pickle.load(f)
 
-EXTRA_PRINTS_ACTIVE: bool = False
-MAX_LINKS_SHOWN: int = 5
-TESTING: bool = False
+with open(docmap_file_path, 'rb') as f:
+    doc_id_map = pickle.load(f)
 
+def tokenize_query(query):
+    from nltk.stem.porter import PorterStemmer
+    stemmer = PorterStemmer()
+    tokens = query.lower().split()
+    tokens = [stemmer.stem(t) for t in tokens]
+    return tokens
 
-def get_unpickled_document(pickle_file: str) -> Any:
-    with open(pickle_file, 'rb') as opened_pickle_file:
-        return pickle.load(opened_pickle_file)
+def get_postings_for_term(term):
+    # Check if term in dictionary
+    if term not in term_dict:
+        return []
 
+    offset = term_dict[term]
 
-if TESTING:
-    inverted_index = {
-        "hello": [Posting(2, 2, 3), Posting(3, 2, 3), Posting(4, 2, 3), Posting(1, 2, 3), Posting(5, 2, 3),],
-        "run": [Posting(2, 2, 3)],
-        "walk": [Posting(3, 2, 3)],
-        "live": [Posting(4, 2, 3)],
-        "exist": [Posting(5, 2, 3)],
-        "believe": [Posting(5, 2, 3)],
-        "goodbye": [Posting(6, 2, 3)],
-    }
-else:
-    inverted_index: dict[token, list[Posting]
-                         ] = get_unpickled_document(resulting_pickle_file_name)
+    # Seek in postings file
+    with open(postings_file_path, 'rb') as pf:
+        pf.seek(offset)
+        # Read the length line
+        length_line = pf.readline().decode('utf-8').strip()
+        length = int(length_line)
+        postings_data = pf.read(length)
+        # postings_data is "doc_id:tfidf doc_id:tfidf ..."
+        postings_str = postings_data.decode('utf-8').strip()
+        postings_pairs = postings_str.split(" ")
+        postings = []
+        for pair in postings_pairs:
+            doc_id_str, tfidf_str = pair.split(":")
+            doc_id_int = int(doc_id_str)
+            tfidf_float = float(tfidf_str)
+            postings.append((doc_id_int, tfidf_float))
+        return postings
 
+def query_and(tokens):
+    # Retrieve postings for each token and intersect
+    if not tokens:
+        return []
+    postings_lists = [get_postings_for_term(t) for t in tokens]
+    # Convert each to dict {doc_id:score} for intersection
+    dicts = []
+    for pl in postings_lists:
+        d = {p[0]: p[1] for p in pl}
+        dicts.append(d)
 
-if EXTRA_PRINTS_ACTIVE:
-    print(f'inverted_index= {inverted_index}')
+    # Intersect by keys
+    # Start with first
+    common_docs = set(dicts[0].keys())
+    for d in dicts[1:]:
+        common_docs.intersection_update(d.keys())
 
+    # Combine scores from intersection (sum tfidf)
+    results = []
+    for doc_id in common_docs:
+        score = sum(d[doc_id] for d in dicts)
+        results.append((doc_id, score))
 
-def get_query_result(query_term: token) -> set[Posting]:
-    return set(inverted_index.get(query_term)) if inverted_index.get(query_term) else set()
-
-
-def get_query_results_and(query_terms: list[token]) -> list[Posting]:
-
-    result = set()
-
-    for query in query_terms:
-        query_res: list[Posting] = get_query_result(query)
-        result.intersection_update(query_res)
-
-    return sorted(result, key=lambda curr_posting: curr_posting.tf_idf)
-
-
-def get_query_results_and_multithreaded(query_terms: list[token]) -> list[Posting]:
-    if not query_terms:
-        return list()
-    results: list[Posting] = list()
-    results_lock: threading.Lock = threading.Lock()
-    threads: list[threading.Thread] = list()
-
-    def get_internal_query_result(query_term: token) -> list[Posting]:
-        query_res = get_query_result(query_term)
-        with results_lock:
-            results.append(query_res)
-
-    for query in query_terms:
-        if EXTRA_PRINTS_ACTIVE:
-            print(f'Args = {query}')
-        new_thread = threading.Thread(
-            target=get_internal_query_result, args=[query])
-        threads.append(new_thread)
-        new_thread.start()
-
-    for thread in threads:
-        thread.join()
-
-    if not results:
-        return None
-    final_result: set[Posting] = results[0]
-    for result in results[1:]:
-        final_result.intersection_update(result)
-
-    return sorted(final_result, key=lambda curr_posting: curr_posting.tf_idf)
-
-
-def parse_queries(query_list: list[token]) -> list[list[token]]:
-    result: list[list[token]] = list()
-    curr_query_list: list[token] = list()
-    for query in query_list.split():
-        match query:
-            case 'AND':
-                continue
-            case 'OR':
-                result.append(curr_query_list)
-                curr_query_list = list()
-            case _:
-                curr_query_list.append(query.lower())
-            # this should be altered when/if we take positioning into account
-            # currently any phrase together is still just two and statements
-
-    result.append(curr_query_list)
-
-    # if query is AND, skip and keep appending to the same list
-    # if query is OR, append curr_query_list to result list and then 0 out curr_query_list
-    # go next
-    # else query is regular query, keep appending
-
-    return result
-
-
-def get_query_results_from_user_input(queries_list: list[list[token]]) -> list[Posting]:
-    query_results: list[list[Posting]] = list()
-    query_results_lock: threading.Lock = threading.Lock()
-    threads: list[threading.Threads] = list()
-
-    def append_query_to_query_results(query_terms):
-        query_res: list[Posting] = get_query_results_and_multithreaded(
-            query_terms)
-        with query_results_lock:
-            query_results.append(query_res)
-
-    for query in queries_list:
-        new_thread = threading.Thread(
-            target=append_query_to_query_results, args=[query])
-        threads.append(new_thread)
-        new_thread.start()
-
-    for thread in threads:
-        thread.join()
-
-    if EXTRA_PRINTS_ACTIVE:
-        print(f'query_results = {query_results}')
-    if not query_results:
-        return list()
-    final_result = set(query_results[0])
-    for result in query_results[1:]:
-        final_result = final_result.union(result)
-
-    return sorted(final_result, key=lambda posting: posting.tf_idf)
-
-
-exit_statements = ["EXIT PLZ", "GOODBYE QUERY"]
-
+    # Sort by score descending
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
 
 def main():
-
     while True:
-        try:
-            user_query = input(f'Please input your next query: ')
-            if user_query in exit_statements:
-                print("Bye bye.")
-                break
-        except EOFError:
-            print("User entered Ctrl + D. Bye bye.")
+        query = input("Enter query (type 'exit' to quit): ").strip()
+        if query.lower() == 'exit':
             break
-        except KeyboardInterrupt:
-            print("Goodbye you little interuptee")
-            break
-
-        # if TESTING:
-        #     print(f'{curr_query_from_user}')
-
-        #     print(f'Getting first query singlethreaded:')
-        #     single_threaded = get_query_results_and(curr_query_from_user[0])
-        #     print(f'{single_threaded}')
-        #     print(f'Getting first query multithreaded:', end='\t')
-
-        #     result = get_query_results_and_multithreaded(
-        #         curr_query_from_user[0])
-        #     print(f'{result}')
-        #     print(f'Got correct result: single = multi', end='\t')
-        #     print(f'{single_threaded == result}')
-        #     # query_results: list[Posting] = get_query_results_from_user_input(
-        #     #     curr_query_from_user)
-
-        parsed_user_input = parse_queries(user_query)
-        if EXTRA_PRINTS_ACTIVE:
-            print(f'Parsed user query = {parsed_user_input}')
-        query_results = get_query_results_from_user_input(parsed_user_input)
-        if not query_results:
-            query_links = None
+        tokens = tokenize_query(query)
+        results = query_and(tokens)
+        if not results:
+            print("No results found.")
         else:
-            query_links = [
-                curr_posting.doc_id for curr_posting in query_results[:MAX_LINKS_SHOWN]]
-        if not query_links:
-            print(f'No results found')
-        else:
-            for link in query_links:
-                print(link)
-
+            # Print top 5 results
+            for doc_id, score in results[:5]:
+                print(f"{doc_id_map[doc_id]} (score: {score})")
 
 if __name__ == "__main__":
     main()
