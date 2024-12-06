@@ -8,11 +8,42 @@ from multiprocessing import Pool, cpu_count
 import threading
 
 token = str
+Position = int
 
 
 EXTRA_PRINTS_ACTIVE: bool = False
 MAX_LINKS_SHOWN: int = 5
 TESTING: bool = False
+
+
+def interpret_line(file: _io.TextIOWrapper) -> list[Posting]:
+    # expecting format: [num_chars_to_read] [doc_id tf_idf weight]
+    # this will return a posting
+    num_chars_to_read = 0
+    while (curr_char := file.read(1)).isnumeric():
+
+        num_chars_to_read = num_chars_to_read * 10 + int(curr_char)
+
+    postings_strings_list: list[str] = file.read(num_chars_to_read).split(',')
+    posting_list = list[Posting]
+    for posting_str in postings_strings_list:
+        #  using this formatting '{self.doc_id} {self.tf} {self.weight} {self.tf_idf}'
+        posting_parts = posting_str.split()
+        doc_id = int(posting_parts[0])
+
+        tf = 0  # tf made 0 because it is not used so no use in calculating the value
+        # resulting tf idf value after weighting accounted for
+        tf_idf = float(posting_parts[2])*float(posting_parts[3])
+        # arguably this step should be done previously as this calculation can be made during the index consutrction
+
+        resulting_posting: Posting = Posting(doc_id, tf, tf_idf)
+        posting_list.append(resulting_posting)
+
+    return posting_list
+
+
+def seek_to_correct_position(query_term: token, term_seek_dictionary: dict[token][Position], file: _io.TextIOWrapper):
+    file.seek(term_seek_dictionary.get(query_term))
 
 
 def get_unpickled_document(pickle_file: str) -> Any:
