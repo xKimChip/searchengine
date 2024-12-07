@@ -2,17 +2,17 @@ import os
 import json
 import math
 import pickle
+import struct
 from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem.porter import PorterStemmer
 from tokenizer import tokenize
-from multiprocessing import Pool, cpu_count
+import heapq
+import string
+import time
 
 # CONFIGURATION
-NUM_PROCESSES = cpu_count()
-CHUNK_SIZE = 1000
-PARTIAL_INDEX_SIZE = 50000
-
+PARTIAL_INDEX_SIZE = 10000
 OUTPUT_DIR = 'index_files'
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
@@ -49,7 +49,6 @@ def calculate_term_frequencies(tokens):
     return tf_dict
 
 def apply_html_weight(soup, term_frequencies):
-    # Apply HTML weights
     for tag_name, weight in HTML_WEIGHT_MULTIPLIERS.items():
         for tag in soup.find_all(tag_name):
             subtokens = tokenize(tag.get_text(separator=' ').lower())
@@ -81,93 +80,161 @@ def process_document(file_path, doc_id):
     apply_html_weight(soup, term_frequencies)
     return url, term_frequencies
 
-def process_chunk(args):
-    """Process a chunk of file paths in a separate process."""
-    file_paths, start_doc_id = args
-    iIndex = defaultdict(list)
-    doc_id_map = []
-    doc_id = start_doc_id
-
-    for fp in file_paths:
-        url, tf_dict = process_document(fp, doc_id)
-        if not tf_dict:
-            doc_id += 1
-            continue
-        doc_id_map.append(url)
-        for term, tf in tf_dict.items():
-            iIndex[term].append(Posting(doc_id, tf))
-        doc_id += 1
-
-    # Return the partial index and the doc_id_map for this chunk
-    return iIndex, doc_id_map
-
 def write_partial_index(iIndex, doc_id_map, partial_count):
-    partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.pkl')
+    partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.bin')
     with open(partial_filename, 'wb') as f:
-        pickle.dump((iIndex, doc_id_map), f)
+        for term in sorted(iIndex.keys()):
+            postings = iIndex[term]
+            term_encoded = term.encode('utf-8')
+            term_len = len(term_encoded)
+            postings_count = len(postings)
+            f.write(struct.pack('>H', term_len))
+            f.write(term_encoded)
+            f.write(struct.pack('>I', postings_count))
+            for p in postings:
+                f.write(struct.pack('>i', p.doc_id))
+                f.write(struct.pack('>d', p.tf))
+    iIndex.clear()
 
-def merge_partial_indexes():
-    # Merge all partial indexes
-    partial_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith('partial_index_') and f.endswith('.pkl')]
+def get_range_file(term):
+    first_char = term[0].lower()
+    if first_char in string.ascii_lowercase:
+        return os.path.join(OUTPUT_DIR, f'inverted_index_{first_char}.bin')
+    else:
+        return os.path.join(OUTPUT_DIR, 'inverted_index_others.bin')
+
+def get_range_dict_file(first_char):
+    if len(first_char) == 1 and first_char in string.ascii_lowercase:
+        return os.path.join(OUTPUT_DIR, f'inverted_index_dict_{first_char}.pkl')
+    else:
+        return os.path.join(OUTPUT_DIR, 'inverted_index_dict_others.pkl')
+
+class PartialIndexReader:
+    def __init__(self, file):
+        self.file = file
+
+    def read_next_term(self):
+        buf = self.file.read(2)
+        if not buf or len(buf) < 2:
+            return None
+        term_len = struct.unpack('>H', buf)[0]
+        term_bytes = self.file.read(term_len)
+        if len(term_bytes) < term_len:
+            return None
+        term = term_bytes.decode('utf-8')
+        pc_buf = self.file.read(4)
+        if len(pc_buf) < 4:
+            return None
+        postings_count = struct.unpack('>I', pc_buf)[0]
+        postings = []
+        for _ in range(postings_count):
+            doc_id_buf = self.file.read(4)
+            tf_buf = self.file.read(8)
+            if len(doc_id_buf) < 4 or len(tf_buf) < 8:
+                return None
+            doc_id = struct.unpack('>i', doc_id_buf)[0]
+            tf = struct.unpack('>d', tf_buf)[0]
+            postings.append((doc_id, tf))
+        return term, postings
+
+def merge_partial_indexes(doc_count):
+    partial_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith('partial_index_') and f.endswith('.bin')]
+    partial_files = [os.path.join(OUTPUT_DIR, pf) for pf in partial_files]
     partial_files.sort()
 
-    global_doc_id_map = []
-    term_postings_map = defaultdict(list)
+    file_objs = [open(pf, 'rb') for pf in partial_files]
+    readers = [PartialIndexReader(f) for f in file_objs]
 
-    for pfile in partial_files:
-        full_path = os.path.join(OUTPUT_DIR, pfile)
-        with open(full_path, 'rb') as pf:
-            iIndex, local_doc_id_map = pickle.load(pf)
-        start_id = len(global_doc_id_map)
-        global_doc_id_map.extend(local_doc_id_map)
-        # Append postings
-        for term, postings in iIndex.items():
-            term_postings_map[term].extend(postings)
+    heap = []
+    for i, r in enumerate(readers):
+        entry = r.read_next_term()
+        if entry:
+            term, postings = entry
+            heapq.heappush(heap, (term, postings, i))
 
-    # Compute DF and IDF
-    doc_count = len(global_doc_id_map)
-    df_map = {term: len(set(p.doc_id for p in postings)) for term, postings in term_postings_map.items()}
-    idf_map = {term: math.log(doc_count / df) for term, df in df_map.items()}
+    range_dicts = defaultdict(dict)
+    range_file_handles = {}
 
-    final_index = {}
-    for term, postings in term_postings_map.items():
-        idf = idf_map[term]
-        new_postings = []
-        for p in postings:
-            tf_idf = p.tf * idf
-            new_postings.append((p.doc_id, tf_idf))
-        new_postings.sort(key=lambda x: x[0])
-        final_index[term] = new_postings
+    def get_file_handle(term):
+        rf = get_range_file(term)
+        if rf not in range_file_handles:
+            range_file_handles[rf] = open(rf, 'wb')
+        return range_file_handles[rf]
 
-    return final_index, global_doc_id_map
+    current_term = None
+    merged_postings = []
 
-def write_final_index(final_index, doc_id_map):
-    postings_file = os.path.join(OUTPUT_DIR, 'inverted_index_postings.txt')
-    dict_file = os.path.join(OUTPUT_DIR, 'inverted_index_dict.pkl')
-    docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
+    while heap:
+        term, postings, rid = heapq.heappop(heap)
+        if current_term is None:
+            current_term = term
+            merged_postings = postings
+        elif term == current_term:
+            merged_postings.extend(postings)
+        else:
+            # write out current_term
+            df = len(set(p[0] for p in merged_postings))
+            idf = math.log(doc_count / df)
+            merged_postings.sort(key=lambda x: x[0])
+            final_postings = [(doc_id, tf * idf) for doc_id, tf in merged_postings]
 
-    with open(docmap_file, 'wb') as f:
-        pickle.dump(doc_id_map, f)
+            out_f = get_file_handle(current_term)
+            term_enc = current_term.encode('utf-8')
+            out_f_start = out_f.tell()
+            out_f.write(struct.pack('>H', len(term_enc)))
+            out_f.write(term_enc)
+            out_f.write(struct.pack('>I', len(final_postings)))
+            for doc_id, score in final_postings:
+                out_f.write(struct.pack('>i', doc_id))
+                out_f.write(struct.pack('>d', score))
 
-    terms = sorted(final_index.keys())
+            range_file = get_range_file(current_term)
+            range_dicts[range_file][current_term] = out_f_start
 
-    with open(postings_file, 'wb') as pf:
-        term_dict = {}
-        for term in terms:
-            start_offset = pf.tell()
-            postings_str = " ".join(f"{doc_id}:{tf_idf:.6f}" for doc_id, tf_idf in final_index[term])
-            postings_bytes = postings_str.encode('utf-8')
-            length = len(postings_bytes)
-            length_bytes = f"{length}\n".encode('utf-8')
-            pf.write(length_bytes)
-            pf.write(postings_bytes)
-            pf.write(b"\n")
-            term_dict[term] = start_offset
+            current_term = term
+            merged_postings = postings
 
-    with open(dict_file, 'wb') as f:
-        pickle.dump(term_dict, f)
+        nxt = readers[rid].read_next_term()
+        if nxt:
+            heapq.heappush(heap, (nxt[0], nxt[1], rid))
+
+    # last term
+    if current_term is not None and merged_postings:
+        df = len(set(p[0] for p in merged_postings))
+        idf = math.log(doc_count / df)
+        merged_postings.sort(key=lambda x: x[0])
+        final_postings = [(doc_id, tf * idf) for doc_id, tf in merged_postings]
+
+        out_f = get_file_handle(current_term)
+        term_enc = current_term.encode('utf-8')
+        out_f_start = out_f.tell()
+        out_f.write(struct.pack('>H', len(term_enc)))
+        out_f.write(term_enc)
+        out_f.write(struct.pack('>I', len(final_postings)))
+        for doc_id, score in final_postings:
+            out_f.write(struct.pack('>i', doc_id))
+            out_f.write(struct.pack('>d', score))
+
+        range_file = get_range_file(current_term)
+        range_dicts[range_file][current_term] = out_f_start
+
+    for f in file_objs:
+        f.close()
+
+    for fh in range_file_handles.values():
+        fh.close()
+
+    # Write out dictionaries
+    for rf, tdict in range_dicts.items():
+        basename = os.path.basename(rf)
+        part = basename.replace('inverted_index_', '').replace('.bin','')
+        dict_file = get_range_dict_file(part)
+        with open(dict_file, 'wb') as df:
+            pickle.dump(tdict, df)
 
 def main():
+    start_time = time.time()
+    
     directory_to_process = 'DEV'
     file_paths = []
     for root, dirs, files in os.walk(directory_to_process):
@@ -175,40 +242,39 @@ def main():
             if filename.endswith('.json'):
                 file_paths.append(os.path.join(root, filename))
 
-    file_paths.sort()
-
-    # Split file_paths into chunks
-    chunks = [file_paths[i:i+CHUNK_SIZE] for i in range(0, len(file_paths), CHUNK_SIZE)]
-
-    # Maintain a running doc_id start for each chunk
-    start_ids = []
-    running_doc_id = 0
-    for c in chunks:
-        start_ids.append(running_doc_id)
-        running_doc_id += len(c)
-
-    # Prepare arguments for pool
-    pool_args = [(c, sid) for c, sid in zip(chunks, start_ids)]
-
-    iIndex_merged = defaultdict(list)
+    iIndex = defaultdict(list)
     doc_id_map = []
+    doc_id = 0
     partial_count = 0
 
-    # Use multiprocessing pool to process chunks
-    with Pool(NUM_PROCESSES) as pool:
-        results = pool.map(process_chunk, pool_args)
+    for fp in file_paths:
+        url, tf_dict = process_document(fp, doc_id)
+        if tf_dict is None:
+            continue
+        doc_id_map.append(url)
 
-    # Write each chunk as a separate partial index file
-    for iIndex_chunk, doc_ids_chunk in results:
-        write_partial_index(iIndex_chunk, doc_ids_chunk, partial_count)
-        partial_count += 1
+        for term, tf in tf_dict.items():
+            iIndex[term].append(Posting(doc_id, tf))
 
-    # Merge all partial indexes
-    final_index, global_doc_id_map = merge_partial_indexes()
+        doc_id += 1
 
-    # Write final index
-    write_final_index(final_index, global_doc_id_map)
-    print("Indexing complete")
+        if doc_id > 0 and doc_id % PARTIAL_INDEX_SIZE == 0:
+            write_partial_index(iIndex, doc_id_map, partial_count)
+            partial_count += 1
+
+    if len(iIndex) > 0:
+        write_partial_index(iIndex, doc_id_map, partial_count)
+
+    docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
+    with open(docmap_file, 'wb') as f:
+        pickle.dump(doc_id_map, f)
+
+    doc_count = len(doc_id_map)
+    merge_partial_indexes(doc_count)
+    
+    end_time = time.time()
+    elapsed = end_time - start_time
+    print(f"Indexing complete in {elapsed:.2f} seconds.")
 
 if __name__ == '__main__':
     main()
