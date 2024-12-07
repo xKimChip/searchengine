@@ -1,19 +1,23 @@
-import os, re
+import os
 import json
-from bs4 import BeautifulSoup
-from collections import OrderedDict, defaultdict
-from multiprocessing import Pool, cpu_count
 import math
 import pickle
-from nltk import WordNetLemmatizer
-
-
-#import globals
+from bs4 import BeautifulSoup
+from collections import defaultdict
+from nltk.stem.porter import PorterStemmer
 from tokenizer import tokenize
+from multiprocessing import Pool, cpu_count
 
-MAX_INDEX_SIZE = 500000
+# CONFIGURATION
+NUM_PROCESSES = cpu_count()
+CHUNK_SIZE = 1000
+PARTIAL_INDEX_SIZE = 50000
 
-HTML_WEIGHT_MULTIPLIER = {
+OUTPUT_DIR = 'index_files'
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
+HTML_WEIGHT_MULTIPLIERS = {
     'title': 3,
     'h1': 2,
     'h2': 1.75,
@@ -27,224 +31,184 @@ HTML_WEIGHT_MULTIPLIER = {
     'h6': 1.05,
 }
 
-global doc_count
-
-
-# Posting class definition
-
+stemmer = PorterStemmer()
 
 class Posting:
-    def __init__(self, doc_id, tf, tf_idf):
-    #def __init__(self, doc_id: set, tf, tf_idf, weight):
+    __slots__ = ['doc_id', 'tf']
+    def __init__(self, doc_id, tf):
         self.doc_id = doc_id
         self.tf = tf
-        self.tf_idf = tf_idf
-        #self.weight = weight
 
-    def __repr__(self) -> str:
-        return f'{self.doc_id} {self.tf} {self.tf_idf}'
+def calculate_term_frequencies(tokens):
+    tf_dict = defaultdict(int)
+    total_terms = len(tokens)
+    for token in tokens:
+        tf_dict[token] += 1
+    for term in tf_dict:
+        tf_dict[term] = tf_dict[term]
+    return tf_dict
 
-    def __str__(self) -> str:
-         return f'{self.doc_id} {self.tf} {self.tf_idf}'
+def apply_html_weight(soup, term_frequencies):
+    # Apply HTML weights
+    for tag_name, weight in HTML_WEIGHT_MULTIPLIERS.items():
+        for tag in soup.find_all(tag_name):
+            subtokens = tokenize(tag.get_text(separator=' ').lower())
+            subtokens = [stemmer.stem(t) for t in subtokens if t.strip()]
+            for t in subtokens:
+                if t in term_frequencies:
+                    term_frequencies[t] *= weight
 
-    def __eq__(self, other):
-        return self.doc_id == other.doc_id
-
-    def __hash__(self):
-        return hash(self.doc_id)
-# Function to read JSON file
-
-def assign_importance_to_tokens(soup_text, term_frequencies_dict):
-    lemma = WordNetLemmatizer()
-    
-    for tag in soup_text.find_all():
-        # Regex to split on tokens pretty much.
-        tag_text = re.split("[^a-zA-Z0-9']+", tag.get_text().lower())
-        
-        for word in tag_text:
-            word = lemma.lemmatize(word.strip(" '"))
-
-            #This should be adding an importance weight multiplier if the word shows up in any of the html_weighted categories.
-            #May change to a multiplier for each category in the future, if the weights get too high.
-            if word in term_frequencies_dict:
-                term_frequencies_dict[word] *= HTML_WEIGHT_MULTIPLIER.get(tag.name, 1)
-        
-
-def read_json_file(file_path):
+def process_document(file_path, doc_id):
     try:
-        with open(file_path, 'r', encoding='ascii') as f:
+        with open(file_path, 'r', encoding='ascii', errors='replace') as f:
             data = json.load(f)
         url = data.get('url')
-        content = data.get('content')
-        
-        #url = data.at_pointer(b'/url').decode()
-        #content = data.at_pointer(b'/content').decode()
-
-        
+        content = data.get('content', '')
         if not url or not content:
             return None, None
-        return url, content
-    except Exception:
+    except:
         return None, None
 
-# Function to extract text from HTML content
-
-
-# def extract_text_from_html(html_content):
-#     try:
-#         soup = BeautifulSoup(html_content, 'html.parser')
-#         # Remove script and style elements
-#         for script_or_style in soup(['script', 'style']):
-#             script_or_style.decompose()
-#         text = soup.get_text(separator=' ').lower
-#         return text
-#     except Exception:
-#         return ''
-
-# Function to calculate term frequencies
-
-
-# def calculate_term_frequencies(tokens):
-#     tf_dict = defaultdict(int)
-#     total_terms = len(tokens)
-#     for token in tokens:
-#         tf_dict[token] += 1 / total_terms
-    
-#     return tf_dict
-
-# Function to process a single JSON file and return doc_id and term frequencies
-
-def process_json_file(file_path):
-
-    doc_url, html_content = read_json_file(file_path)
-    if not html_content:
-        return None
-    
-    
-    #soup = extract_text_from_html(html_content)
-    soup = BeautifulSoup(html_content, 'lxml')
-    
+    soup = BeautifulSoup(content, 'lxml')
     text = soup.get_text(separator=' ').lower()
-    
     tokens = tokenize(text)
+    tokens = [stemmer.stem(t) for t in tokens if t.strip()]
+
     if not tokens:
-        return None
+        return None, None
+
     term_frequencies = calculate_term_frequencies(tokens)
-    
-    #if (sys.getsizeof(index) > MAX_INDEX_SIZE):
-    #   write_partial_idx() 
-    
-    #Assign a weight importance to each token
-    #assign_importance_to_tokens(soup, term_frequencies)
+    apply_html_weight(soup, term_frequencies)
+    return url, term_frequencies
 
-    return (doc_url, term_frequencies)
+def process_chunk(args):
+    """Process a chunk of file paths in a separate process."""
+    file_paths, start_doc_id = args
+    iIndex = defaultdict(list)
+    doc_id_map = []
+    doc_id = start_doc_id
 
-
-resulting_pickle_file_name = 'inverted_index.txt'
-resulting_index_of_index = 'index_index.txt'
-# Main execution block
-if __name__ == '__main__':
-    inverted_index = defaultdict(list)
-    doc_freqs = defaultdict(int)  # Document frequencies
-    doc_ids = set()  # Set of unique document IDs
-    doc_id_map = defaultdict()
-    
-    # Path to the directory you want to process
-    directory_to_process = os.path.join('DEV')
-    file_paths = []
-    if os.path.exists(directory_to_process):
-        for root, dirs, files in os.walk(directory_to_process):
-            for filename in files:
-                if filename.endswith('.json'):
-                    file_path = os.path.join(root, filename)
-                    file_paths.append(file_path)
-    else:
-        print(f"The directory {directory_to_process} does not exist.")
-        exit(1)
-
-    # Multiprocessing
-    num_workers = cpu_count()
-    with Pool(num_workers) as pool:
-        results = pool.map(process_json_file, file_paths)
-
-    # Collect term frequencies and document frequencies
-    doc_term_freqs = {}  # {doc_id: {token: tf}}
-
-    doc_count = 0
-    for result in results:
-        if result is None:
+    for fp in file_paths:
+        url, tf_dict = process_document(fp, doc_id)
+        if not tf_dict:
+            doc_id += 1
             continue
-        doc_url, term_frequencies = result
-        doc_id = doc_count
-        doc_id_map[doc_id] = doc_url
-        #doc_ids.add(doc_id)
-        doc_term_freqs[doc_id] = term_frequencies
-        
-        for token in term_frequencies.keys():
-            doc_freqs[token] += 1  # Increment document frequency for the token
-        
-        doc_count += 1
+        doc_id_map.append(url)
+        for term, tf in tf_dict.items():
+            iIndex[term].append(Posting(doc_id, tf))
+        doc_id += 1
 
-    #total_docs = len(doc_ids)  # Total number of documents
+    # Return the partial index and the doc_id_map for this chunk
+    return iIndex, doc_id_map
 
-    # Calculate idf values
-    idf_values = {}
-    for token, df in doc_freqs.items():
-        idf = math.log(doc_count / df)
-        idf_values[token] = idf
+def write_partial_index(iIndex, doc_id_map, partial_count):
+    partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.pkl')
+    with open(partial_filename, 'wb') as f:
+        pickle.dump((iIndex, doc_id_map), f)
 
-    #Redo the inverted index to have all doc id's in the set of doc_ids
-    
-    
-    
-    # Build the inverted index with tf-idf scores
-    for doc_id, term_frequencies in doc_term_freqs.items():
-        for token, tf in term_frequencies.items():
-            idf = idf_values[token]
-            tf_idf = tf * idf
-            posting = Posting(doc_id, tf, tf_idf)
-            # if the first char of the token changes, add new index with the position.
-            if token not in inverted_index:
-                new_posting_list = [posting]
-                inverted_index[token] = new_posting_list
-            else:
-                inverted_index[token].append(posting) #possibly words for the ordered dict?
-            #inverted_index[token].append(posting)
-            
-    #sort the inverted index
-    sorted_items = sorted(inverted_index.items(), key=lambda item: item[0])
-    sorted_inverted_index = dict(sorted_items)
-    
-    #Build the index of the index
-    line_count = 0
-    last_char = '\0'
-    #ind_ind = defaultdict(char)
-    # for token, value in inverted_index.items():
-        
-    #     if token[0] != last_char:
-    #         last_char = token[0]
-    #         ind_ind[last_char] = token
-            
-    # with open(resulting_index_of_index, 'w') as f:
-    #     for key, value in ind_ind.items():
-    #         f.write(f"{key}: {value}\n")
-    
+def merge_partial_indexes():
+    # Merge all partial indexes
+    partial_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith('partial_index_') and f.endswith('.pkl')]
+    partial_files.sort()
 
-    # Save the inverted index to disk
-    # with open(resulting_pickle_file_name, 'wb') as f:
-    #     pickle.dump(inverted_index, f)
+    global_doc_id_map = []
+    term_postings_map = defaultdict(list)
 
-    # Save the inverted index to disk
-    with open(resulting_pickle_file_name, 'w') as f:
-        for key, value in sorted_inverted_index.items():
-            f.write(f"{key}: {value}\n")
-        
+    for pfile in partial_files:
+        full_path = os.path.join(OUTPUT_DIR, pfile)
+        with open(full_path, 'rb') as pf:
+            iIndex, local_doc_id_map = pickle.load(pf)
+        start_id = len(global_doc_id_map)
+        global_doc_id_map.extend(local_doc_id_map)
+        # Append postings
+        for term, postings in iIndex.items():
+            term_postings_map[term].extend(postings)
 
-    # Get the size of the index file in KB
-    index_size_kb = os.path.getsize(resulting_pickle_file_name) / 1024
+    # Compute DF and IDF
+    doc_count = len(global_doc_id_map)
+    df_map = {term: len(set(p.doc_id for p in postings)) for term, postings in term_postings_map.items()}
+    idf_map = {term: math.log(doc_count / df) for term, df in df_map.items()}
 
-    # Display the analytics
-    print("\n=== Index Analytics ===")
-    print(f"Number of indexed documents: {doc_count}")
-    print(f"Number of unique tokens: {len(inverted_index)}")
-    print(f"Total size of the index on disk: {index_size_kb:.2f} KB")
+    final_index = {}
+    for term, postings in term_postings_map.items():
+        idf = idf_map[term]
+        new_postings = []
+        for p in postings:
+            tf_idf = p.tf * idf
+            new_postings.append((p.doc_id, tf_idf))
+        new_postings.sort(key=lambda x: x[0])
+        final_index[term] = new_postings
+
+    return final_index, global_doc_id_map
+
+def write_final_index(final_index, doc_id_map):
+    postings_file = os.path.join(OUTPUT_DIR, 'inverted_index_postings.txt')
+    dict_file = os.path.join(OUTPUT_DIR, 'inverted_index_dict.pkl')
+    docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
+
+    with open(docmap_file, 'wb') as f:
+        pickle.dump(doc_id_map, f)
+
+    terms = sorted(final_index.keys())
+
+    with open(postings_file, 'wb') as pf:
+        term_dict = {}
+        for term in terms:
+            start_offset = pf.tell()
+            postings_str = " ".join(f"{doc_id}:{tf_idf:.6f}" for doc_id, tf_idf in final_index[term])
+            postings_bytes = postings_str.encode('utf-8')
+            length = len(postings_bytes)
+            length_bytes = f"{length}\n".encode('utf-8')
+            pf.write(length_bytes)
+            pf.write(postings_bytes)
+            pf.write(b"\n")
+            term_dict[term] = start_offset
+
+    with open(dict_file, 'wb') as f:
+        pickle.dump(term_dict, f)
+
+def main():
+    directory_to_process = 'DEV'
+    file_paths = []
+    for root, dirs, files in os.walk(directory_to_process):
+        for filename in files:
+            if filename.endswith('.json'):
+                file_paths.append(os.path.join(root, filename))
+
+    file_paths.sort()
+
+    # Split file_paths into chunks
+    chunks = [file_paths[i:i+CHUNK_SIZE] for i in range(0, len(file_paths), CHUNK_SIZE)]
+
+    # Maintain a running doc_id start for each chunk
+    start_ids = []
+    running_doc_id = 0
+    for c in chunks:
+        start_ids.append(running_doc_id)
+        running_doc_id += len(c)
+
+    # Prepare arguments for pool
+    pool_args = [(c, sid) for c, sid in zip(chunks, start_ids)]
+
+    iIndex_merged = defaultdict(list)
+    doc_id_map = []
+    partial_count = 0
+
+    # Use multiprocessing pool to process chunks
+    with Pool(NUM_PROCESSES) as pool:
+        results = pool.map(process_chunk, pool_args)
+
+    # Write each chunk as a separate partial index file
+    for iIndex_chunk, doc_ids_chunk in results:
+        write_partial_index(iIndex_chunk, doc_ids_chunk, partial_count)
+        partial_count += 1
+
+    # Merge all partial indexes
+    final_index, global_doc_id_map = merge_partial_indexes()
+
+    # Write final index
+    write_final_index(final_index, global_doc_id_map)
+    print("Indexing complete")
+
+if __name__ == '__main__':
+    main()

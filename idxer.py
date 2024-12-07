@@ -19,7 +19,7 @@ partialidx_count = 1
 resulting_txt_IOI = 'index_index.txt'
 resulting_pickle_IOI = 'index_index.pkl'
 
-PICKLE = False
+PICKLE = True
 MULTI_PROC = False
 
 
@@ -159,6 +159,7 @@ def merge_partialidx(partialidx):
         if index_char_file != char_file:
             #dump json from memory into old index_file
             
+            
             index_char_file = char_file
             
             with open(f'results/{char_file}') as f:
@@ -228,4 +229,4 @@ def main():
 
 # Main execution block
 if __name__ == '__main__':
-    main()
+    #main()

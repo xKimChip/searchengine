@@ -22,7 +22,7 @@ def calculate_term_frequencies(tokens):
     tf_dict = defaultdict(int)
     total_terms = len(tokens)
     for token in tokens:
-        tf_dict[token] += 1 / total_terms
+        tf_dict[token] += 1
     
     return tf_dict
         
