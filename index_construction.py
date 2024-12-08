@@ -12,7 +12,7 @@ import string
 import time
 
 # CONFIGURATION
-PARTIAL_INDEX_SIZE = 10000
+PARTIAL_INDEX_SIZE = 50000
 OUTPUT_DIR = 'index_files'
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
@@ -33,31 +33,34 @@ HTML_WEIGHT_MULTIPLIERS = {
 
 stemmer = PorterStemmer()
 
+# Simple cache for stemming results to speed up processing
+stem_cache = {}
+
+def stem_token(token):
+    if token in stem_cache:
+        return stem_cache[token]
+    s = stemmer.stem(token)
+    stem_cache[token] = s
+    return s
+
+def generate_ngrams(tokens, n):
+    length = len(tokens)
+    if length < n:
+        return []
+    return ['_'.join(tokens[i:i+n]) for i in range(length - n + 1)]
+
 class Posting:
-    __slots__ = ['doc_id', 'tf']
-    def __init__(self, doc_id, tf):
+    __slots__ = ['doc_id', 'count']
+    def __init__(self, doc_id, count):
         self.doc_id = doc_id
-        self.tf = tf
+        self.count = count  # Store raw counts
 
-def calculate_term_frequencies(tokens):
-    tf_dict = defaultdict(int)
-    total_terms = len(tokens)
-    for token in tokens:
-        tf_dict[token] += 1
-    for term in tf_dict:
-        tf_dict[term] = tf_dict[term] / total_terms
-    return tf_dict
-
-def apply_html_weight(soup, term_frequencies):
-    for tag_name, weight in HTML_WEIGHT_MULTIPLIERS.items():
-        for tag in soup.find_all(tag_name):
-            subtokens = tokenize(tag.get_text(separator=' ').lower())
-            subtokens = [stemmer.stem(t) for t in subtokens if t.strip()]
-            for t in subtokens:
-                if t in term_frequencies:
-                    term_frequencies[t] *= weight
+def fast_tokenize_and_stem(text):
+    raw_tokens = tokenize(text)
+    return [stem_token(t) for t in raw_tokens if t.strip()]
 
 def process_document(file_path, doc_id):
+    # Read JSON
     try:
         with open(file_path, 'r', encoding='ascii', errors='replace') as f:
             data = json.load(f)
@@ -69,21 +72,47 @@ def process_document(file_path, doc_id):
         return None, None
 
     soup = BeautifulSoup(content, 'lxml')
-    text = soup.get_text(separator=' ').lower()
-    tokens = tokenize(text)
-    tokens = [stemmer.stem(t) for t in tokens if t.strip()]
-
+    # Extract main text
+    main_text = soup.get_text(separator=' ').lower()
+    tokens = fast_tokenize_and_stem(main_text)
     if not tokens:
         return None, None
 
-    term_frequencies = calculate_term_frequencies(tokens)
-    apply_html_weight(soup, term_frequencies)
-    return url, term_frequencies
+    # Extract texts from special tags once
+    weighted_tokens_counts = defaultdict(float)
+    for tag_name, weight in HTML_WEIGHT_MULTIPLIERS.items():
+        for tag in soup.find_all(tag_name):
+            tag_text = tag.get_text(separator=' ').lower()
+            tag_tokens = fast_tokenize_and_stem(tag_text)
+            add_factor = weight - 1.0
+            for tt in tag_tokens:
+                weighted_tokens_counts[tt] += add_factor
+
+    # Add bigrams and trigrams
+    bigrams = generate_ngrams(tokens, 2) if len(tokens) > 1 else []
+    trigrams = generate_ngrams(tokens, 3) if len(tokens) > 2 else []
+    all_tokens = tokens + bigrams + trigrams
+
+    # Count frequencies (raw counts)
+    freq = defaultdict(int)
+    for t in all_tokens:
+        freq[t] += 1
+
+    # Apply weights to unigrams
+    # Multiplying raw counts by the weight factor
+    for t, add_factor in weighted_tokens_counts.items():
+        if t in freq:
+            weight = 1.0 + add_factor
+            freq[t] = int(freq[t] * weight)
+
+    return url, freq
 
 def write_partial_index(iIndex, doc_id_map, partial_count):
     partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.bin')
     with open(partial_filename, 'wb') as f:
-        for term in sorted(iIndex.keys()):
+        terms = list(iIndex.keys())
+        terms.sort()
+        for term in terms:
             postings = iIndex[term]
             term_encoded = term.encode('utf-8')
             term_len = len(term_encoded)
@@ -92,22 +121,10 @@ def write_partial_index(iIndex, doc_id_map, partial_count):
             f.write(term_encoded)
             f.write(struct.pack('>I', postings_count))
             for p in postings:
+                # p.count is raw count; TF-IDF will be computed later
                 f.write(struct.pack('>i', p.doc_id))
-                f.write(struct.pack('>d', p.tf))
+                f.write(struct.pack('>d', float(p.count)))
     iIndex.clear()
-
-def get_range_file(term):
-    first_char = term[0].lower()
-    if first_char in string.ascii_lowercase:
-        return os.path.join(OUTPUT_DIR, f'inverted_index_{first_char}.bin')
-    else:
-        return os.path.join(OUTPUT_DIR, 'inverted_index_others.bin')
-
-def get_range_dict_file(first_char):
-    if len(first_char) == 1 and first_char in string.ascii_lowercase:
-        return os.path.join(OUTPUT_DIR, f'inverted_index_dict_{first_char}.pkl')
-    else:
-        return os.path.join(OUTPUT_DIR, 'inverted_index_dict_others.pkl')
 
 class PartialIndexReader:
     def __init__(self, file):
@@ -129,13 +146,26 @@ class PartialIndexReader:
         postings = []
         for _ in range(postings_count):
             doc_id_buf = self.file.read(4)
-            tf_buf = self.file.read(8)
-            if len(doc_id_buf) < 4 or len(tf_buf) < 8:
+            count_buf = self.file.read(8)
+            if len(doc_id_buf) < 4 or len(count_buf) < 8:
                 return None
             doc_id = struct.unpack('>i', doc_id_buf)[0]
-            tf = struct.unpack('>d', tf_buf)[0]
-            postings.append((doc_id, tf))
+            c = struct.unpack('>d', count_buf)[0]
+            postings.append((doc_id, c))
         return term, postings
+
+def get_range_file(term):
+    first_char = term[0].lower()
+    if first_char in string.ascii_lowercase:
+        return os.path.join(OUTPUT_DIR, f'inverted_index_{first_char}.bin')
+    else:
+        return os.path.join(OUTPUT_DIR, 'inverted_index_others.bin')
+
+def get_range_dict_file(first_char):
+    if len(first_char) == 1 and first_char in string.ascii_lowercase:
+        return os.path.join(OUTPUT_DIR, f'inverted_index_dict_{first_char}.pkl')
+    else:
+        return os.path.join(OUTPUT_DIR, 'inverted_index_dict_others.pkl')
 
 def merge_partial_indexes(doc_count):
     partial_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith('partial_index_') and f.endswith('.bin')]
@@ -172,11 +202,11 @@ def merge_partial_indexes(doc_count):
         elif term == current_term:
             merged_postings.extend(postings)
         else:
-            # write out current_term
+            # Write out current_term
             df = len(set(p[0] for p in merged_postings))
             idf = math.log(doc_count / df)
             merged_postings.sort(key=lambda x: x[0])
-            final_postings = [(doc_id, tf * idf) for doc_id, tf in merged_postings]
+            final_postings = [(doc_id, count * idf) for doc_id, count in merged_postings]
 
             out_f = get_file_handle(current_term)
             term_enc = current_term.encode('utf-8')
@@ -198,12 +228,12 @@ def merge_partial_indexes(doc_count):
         if nxt:
             heapq.heappush(heap, (nxt[0], nxt[1], rid))
 
-    # last term
+    # Last term
     if current_term is not None and merged_postings:
         df = len(set(p[0] for p in merged_postings))
         idf = math.log(doc_count / df)
         merged_postings.sort(key=lambda x: x[0])
-        final_postings = [(doc_id, tf * idf) for doc_id, tf in merged_postings]
+        final_postings = [(doc_id, count * idf) for doc_id, count in merged_postings]
 
         out_f = get_file_handle(current_term)
         term_enc = current_term.encode('utf-8')
@@ -248,21 +278,23 @@ def main():
     partial_count = 0
 
     for fp in file_paths:
-        url, tf_dict = process_document(fp, doc_id)
-        if tf_dict is None:
+        url, freq = process_document(fp, doc_id)
+        if freq is None:
             continue
         doc_id_map.append(url)
 
-        for term, tf in tf_dict.items():
-            iIndex[term].append(Posting(doc_id, tf))
+        for term, count in freq.items():
+            iIndex[term].append(Posting(doc_id, count))
 
         doc_id += 1
 
+        # If we hit partial size, write partial index
         if doc_id > 0 and doc_id % PARTIAL_INDEX_SIZE == 0:
             write_partial_index(iIndex, doc_id_map, partial_count)
             partial_count += 1
 
-    if len(iIndex) > 0:
+    # Write last partial index
+    if iIndex:
         write_partial_index(iIndex, doc_id_map, partial_count)
 
     docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')

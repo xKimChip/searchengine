@@ -39,6 +39,9 @@ def tokenize_query(query):
     tokens = [stemmer.stem(t) for t in tokens]
     return tokens
 
+def generate_ngrams(tokens, n):
+    return ['_'.join(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
+
 def get_range_file(term):
     if not term:
         return os.path.join(OUTPUT_DIR, 'inverted_index_others.bin')
@@ -79,24 +82,32 @@ def get_postings_for_term(term):
     return postings
 
 def query_and(tokens):
+    # In addition to single tokens, we incorporate 2-grams and 3-grams
     if not tokens:
         return []
+
+    # Get single-term postings
     postings_lists = [get_postings_for_term(t) for t in tokens]
-    if not all(postings_lists):
-        return []
-    dicts = []
+
+    # Generate and retrieve bigrams and trigrams from the query
+    bigrams = generate_ngrams(tokens, 2)
+    trigrams = generate_ngrams(tokens, 3)
+
+    # Add their postings as well
+    for bg in bigrams:
+        postings_lists.append(get_postings_for_term(bg))
+    for tg in trigrams:
+        postings_lists.append(get_postings_for_term(tg))
+
+    # Combine scores from all postings (single terms, bigrams, trigrams)
+    # Instead of strict intersection, we union all doc_ids and sum their scores.
+    score_map = {}
     for pl in postings_lists:
-        d = {p[0]: p[1] for p in pl}
-        dicts.append(d)
-    common_docs = set(dicts[0].keys())
-    for d in dicts[1:]:
-        common_docs.intersection_update(d.keys())
+        for doc_id, score in pl:
+            score_map[doc_id] = score_map.get(doc_id, 0) + score
 
-    results = []
-    for doc_id in common_docs:
-        score = sum(d[doc_id] for d in dicts)
-        results.append((doc_id, score))
-
+    # Convert to a list of (doc_id, score) and sort
+    results = list(score_map.items())
     results.sort(key=lambda x: x[1], reverse=True)
     return results
 
