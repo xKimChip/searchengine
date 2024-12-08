@@ -11,7 +11,6 @@ import heapq
 import string
 import time
 
-# CONFIGURATION
 PARTIAL_INDEX_SIZE = 50000
 OUTPUT_DIR = 'index_files'
 if not os.path.exists(OUTPUT_DIR):
@@ -32,8 +31,6 @@ HTML_WEIGHT_MULTIPLIERS = {
 }
 
 stemmer = PorterStemmer()
-
-# Simple cache for stemming results to speed up processing
 stem_cache = {}
 
 def stem_token(token):
@@ -53,32 +50,30 @@ class Posting:
     __slots__ = ['doc_id', 'count']
     def __init__(self, doc_id, count):
         self.doc_id = doc_id
-        self.count = count  # Store raw counts
+        self.count = count
 
 def fast_tokenize_and_stem(text):
     raw_tokens = tokenize(text)
     return [stem_token(t) for t in raw_tokens if t.strip()]
 
 def process_document(file_path, doc_id):
-    # Read JSON
     try:
         with open(file_path, 'r', encoding='ascii', errors='replace') as f:
             data = json.load(f)
         url = data.get('url')
         content = data.get('content', '')
         if not url or not content:
-            return None, None
+            return None, None, None
     except:
-        return None, None
+        return None, None, None
 
     soup = BeautifulSoup(content, 'lxml')
-    # Extract main text
     main_text = soup.get_text(separator=' ').lower()
     tokens = fast_tokenize_and_stem(main_text)
     if not tokens:
-        return None, None
+        return url, None, None
 
-    # Extract texts from special tags once
+    # Collect weighted tokens for HTML tags
     weighted_tokens_counts = defaultdict(float)
     for tag_name, weight in HTML_WEIGHT_MULTIPLIERS.items():
         for tag in soup.find_all(tag_name):
@@ -88,24 +83,41 @@ def process_document(file_path, doc_id):
             for tt in tag_tokens:
                 weighted_tokens_counts[tt] += add_factor
 
-    # Add bigrams and trigrams
+    # Extract anchor texts for indexing into the target pages later
+    # This returns a mapping of target_url -> list_of_anchor_tokens
+    anchor_map_for_this_doc = defaultdict(list)
+    for a_tag in soup.find_all('a', href=True):
+        href = a_tag['href']
+        # anchor text
+        anchor_text = a_tag.get_text(separator=' ').lower()
+        anchor_tokens = fast_tokenize_and_stem(anchor_text)
+        # We also can consider n-grams for anchor text if desired
+        # It's optional, but let's do it for completeness
+        if len(anchor_tokens) > 1:
+            anchor_tokens += generate_ngrams(anchor_tokens, 2)
+            if len(anchor_tokens) > 2:
+                anchor_tokens += generate_ngrams(anchor_tokens, 3)
+        
+        # Record them for the target URL
+        if anchor_tokens:
+            anchor_map_for_this_doc[href].extend(anchor_tokens)
+
+    # Add bigrams and trigrams to main tokens
     bigrams = generate_ngrams(tokens, 2) if len(tokens) > 1 else []
     trigrams = generate_ngrams(tokens, 3) if len(tokens) > 2 else []
     all_tokens = tokens + bigrams + trigrams
 
-    # Count frequencies (raw counts)
     freq = defaultdict(int)
     for t in all_tokens:
         freq[t] += 1
 
     # Apply weights to unigrams
-    # Multiplying raw counts by the weight factor
     for t, add_factor in weighted_tokens_counts.items():
         if t in freq:
             weight = 1.0 + add_factor
             freq[t] = int(freq[t] * weight)
 
-    return url, freq
+    return url, freq, anchor_map_for_this_doc
 
 def write_partial_index(iIndex, doc_id_map, partial_count):
     partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.bin')
@@ -121,7 +133,6 @@ def write_partial_index(iIndex, doc_id_map, partial_count):
             f.write(term_encoded)
             f.write(struct.pack('>I', postings_count))
             for p in postings:
-                # p.count is raw count; TF-IDF will be computed later
                 f.write(struct.pack('>i', p.doc_id))
                 f.write(struct.pack('>d', float(p.count)))
     iIndex.clear()
@@ -202,7 +213,7 @@ def merge_partial_indexes(doc_count):
         elif term == current_term:
             merged_postings.extend(postings)
         else:
-            # Write out current_term
+            # write out current_term
             df = len(set(p[0] for p in merged_postings))
             idf = math.log(doc_count / df)
             merged_postings.sort(key=lambda x: x[0])
@@ -228,7 +239,7 @@ def merge_partial_indexes(doc_count):
         if nxt:
             heapq.heappush(heap, (nxt[0], nxt[1], rid))
 
-    # Last term
+    # last term
     if current_term is not None and merged_postings:
         df = len(set(p[0] for p in merged_postings))
         idf = math.log(doc_count / df)
@@ -275,10 +286,13 @@ def main():
     iIndex = defaultdict(list)
     doc_id_map = []
     doc_id = 0
-    partial_count = 0
+
+    # This will store anchor tokens for pages that are linked to, but we don't know their doc_id yet.
+    # Structure: {target_url: [list of anchor tokens]}
+    anchor_text_map = defaultdict(list)
 
     for fp in file_paths:
-        url, freq = process_document(fp, doc_id)
+        url, freq, anchor_map_for_this_doc = process_document(fp, doc_id)
         if freq is None:
             continue
         doc_id_map.append(url)
@@ -286,22 +300,49 @@ def main():
         for term, count in freq.items():
             iIndex[term].append(Posting(doc_id, count))
 
+        # Merge anchor_map_for_this_doc into global anchor_text_map
+        # handle doc_id resolution later
+        for target_url, tokens in anchor_map_for_this_doc.items():
+            anchor_text_map[target_url].extend(tokens)
+
         doc_id += 1
 
-        # If we hit partial size, write partial index
+        # Write partial index periodically if large
         if doc_id > 0 and doc_id % PARTIAL_INDEX_SIZE == 0:
-            write_partial_index(iIndex, doc_id_map, partial_count)
-            partial_count += 1
+            write_partial_index(iIndex, doc_id_map, doc_id // PARTIAL_INDEX_SIZE - 1)
 
-    # Write last partial index
+    # Write last partial index if any
     if iIndex:
-        write_partial_index(iIndex, doc_id_map, partial_count)
+        write_partial_index(iIndex, doc_id_map, doc_id // PARTIAL_INDEX_SIZE)
 
     docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
     with open(docmap_file, 'wb') as f:
         pickle.dump(doc_id_map, f)
 
     doc_count = len(doc_id_map)
+
+    # Now integrate anchor text:
+    # For each target_url in anchor_text_map, find doc_id and add anchor tokens.
+    url_to_id = {u: i for i, u in enumerate(doc_id_map)}
+    # iIndex was cleared after writing partial indexes, we need to rebuild it for anchor terms
+    # Or we can do anchor indexing in memory and write a separate partial index.
+    anchor_iIndex = defaultdict(list)
+
+    for target_url, tokens in anchor_text_map.items():
+        if target_url in url_to_id:
+            target_doc_id = url_to_id[target_url]
+            freq = defaultdict(int)
+            for t in tokens:
+                freq[t] += 1
+            for term, count in freq.items():
+                anchor_iIndex[term].append(Posting(target_doc_id, count))
+
+    # Write anchor partial index if it has data
+    if anchor_iIndex:
+        # We'll treat anchor_iIndex as another partial index and write it out.
+        write_partial_index(anchor_iIndex, doc_id_map, doc_id // PARTIAL_INDEX_SIZE + 1)
+
+    # Merge all partial indexes now (both original text and anchor text)
     merge_partial_indexes(doc_count)
     
     end_time = time.time()
