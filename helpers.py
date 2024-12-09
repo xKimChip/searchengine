@@ -1,47 +1,31 @@
-import os, re
-from collections import OrderedDict, defaultdict
-from nltk import WordNetLemmatizer
+def page_rank(graph, damping_factor=0.85, max_iterations=100, tol=1e-6):
+    # Step 1: Initialize variables
+    nodes = list(graph.keys())
+    N = len(nodes)
+    ranks = {node: 1 / N for node in nodes}  # Initial PageRank values
+    new_ranks = ranks.copy()  # To store updated PageRank values
 
+    # Step 2: Create a set of dangling nodes (nodes with no outgoing links)
+    dangling_nodes = {node for node in nodes if not graph[node]}
 
+    # Step 3: Iteratively calculate PageRank
+    for iteration in range(max_iterations):
+        # Distribute PageRank from dangling nodes
+        dangling_rank_sum = sum(ranks[node] for node in dangling_nodes)
+        for node in nodes:
+            # Base rank contribution
+            new_ranks[node] = (1 - damping_factor) / N
+            # Contribution from dangling nodes
+            new_ranks[node] += damping_factor * dangling_rank_sum / N
+            # Contribution from incoming links
+            for other_node in nodes:
+                if node in graph[other_node]:  # If there's a link from other_node to node
+                    new_ranks[node] += damping_factor * ranks[other_node] / len(graph[other_node])
 
-HTML_WEIGHT_MULTIPLIER = {
-    'title': 3,
-    'h1': 2,
-    'h2': 1.75,
-    'h3': 1.5,
-    'b': 1.25,
-    'strong': 1.25,
-    'a': 1.05,
-    'i': 1.05,
-    'em': 1.05,
-    'h5': 1.05,
-    'h6': 1.05,
-}
+        # Check for convergence
+        delta = sum(abs(new_ranks[node] - ranks[node]) for node in nodes)
+        ranks = new_ranks.copy()  # Update ranks
+        if delta < tol:
+            break
 
-def calculate_term_frequencies(tokens):
-    tf_dict = defaultdict(int)
-    total_terms = len(tokens)
-    for token in tokens:
-        tf_dict[token] += 1
-    
-    return tf_dict
-        
-
-
-def calculate_term_weights(soup_text, term_frequencies_dict):
-    lemma = WordNetLemmatizer()
-    tw_dict = defaultdict(int)
-    
-    for tag in soup_text.find_all():
-        # Regex to split on tokens pretty much.
-        tag_text = re.split("[^a-zA-Z0-9']+", tag.get_text().lower())
-        
-        for word in tag_text:
-            word = lemma.lemmatize(word.strip(" '"))
-
-            #This should be adding an importance weight multiplier if the word shows up in any of the html_weighted categories.
-            #May change to a multiplier for each category in the future, if the weights get too high.
-            if word in term_frequencies_dict:
-                tw_dict[word] += HTML_WEIGHT_MULTIPLIER.get(tag.name, 1)
-                
-    return tw_dict
+    return ranks

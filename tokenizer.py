@@ -1,7 +1,7 @@
 #import globals 
-import nltk
+from nltk.stem.porter import PorterStemmer
 #nltk.download('wordnet')
-lemma = nltk.wordnet.WordNetLemmatizer()
+stemmer = PorterStemmer()
 
 MAX_TOKEN_LENGTH = 10000
 
@@ -25,7 +25,8 @@ def tokenize(text_content: str):
                 if token_chars:
                     token = ''.join(token_chars)
                     token = token.strip(" '")       #added strip to tokenizer
-                    tokens.append(lemma.lemmatize(token))
+                    #tokens.append(lemma.lemmatize(token))
+                    tokens.append(stemmer.stem(token))
                     #tokens.append(token)
                     token_chars = []
                 # Reset the skipping flag after non-alphanumeric character
@@ -35,7 +36,8 @@ def tokenize(text_content: str):
         if token_chars and not skipping_long_token:
             token = ''.join(token_chars)
             token = token.strip(" '")       #added strip to tokenizer
-            tokens.append(lemma.lemmatize(token))
+            #tokens.append(lemma.lemmatize(token))
+            tokens.append(stemmer.stem(token))
             #tokens.append(token)
 
     except Exception as e:

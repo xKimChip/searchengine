@@ -10,6 +10,10 @@ from tokenizer import tokenize
 import heapq
 import string
 import time
+import numpy as np
+from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
+from helpers import *
+
 
 PARTIAL_INDEX_SIZE = 50000
 OUTPUT_DIR = 'index_files'
@@ -32,6 +36,8 @@ HTML_WEIGHT_MULTIPLIERS = {
 
 stemmer = PorterStemmer()
 stem_cache = {}
+
+
 
 def stem_token(token):
     if token in stem_cache:
@@ -63,15 +69,15 @@ def process_document(file_path, doc_id):
         url = data.get('url')
         content = data.get('content', '')
         if not url or not content:
-            return None, None, None
+            return None, None, None, None
     except:
-        return None, None, None
+        return None, None, None, None
 
     soup = BeautifulSoup(content, 'lxml')
     main_text = soup.get_text(separator=' ').lower()
     tokens = fast_tokenize_and_stem(main_text)
     if not tokens:
-        return url, None, None
+        return url, None, None, None
 
     # Collect weighted tokens for HTML tags
     weighted_tokens_counts = defaultdict(float)
@@ -102,6 +108,24 @@ def process_document(file_path, doc_id):
         if anchor_tokens:
             anchor_map_for_this_doc[href].extend(anchor_tokens)
 
+    #extract adjacent pages list
+    adjacency_list = []
+    for a_tag in soup.find_all('a', href=True):
+        href = tag.get('href')
+        if href:
+            if href.lower().startswith('javascript:'):
+                continue
+            
+            absolute_url = urljoin(url, href)
+            
+            absolute_url, _ = urldefrag(absolute_url)
+            
+            parsed_href = urlparse(absolute_url)
+            
+            if parsed_href.scheme in {'http', 'https'}:
+                adjacency_list.append(absolute_url)
+
+
     # Add bigrams and trigrams to main tokens
     bigrams = generate_ngrams(tokens, 2) if len(tokens) > 1 else []
     trigrams = generate_ngrams(tokens, 3) if len(tokens) > 2 else []
@@ -117,7 +141,7 @@ def process_document(file_path, doc_id):
             weight = 1.0 + add_factor
             freq[t] = int(freq[t] * weight)
 
-    return url, freq, anchor_map_for_this_doc
+    return url, freq, anchor_map_for_this_doc, adjacency_list 
 
 def write_partial_index(iIndex, doc_id_map, partial_count):
     partial_filename = os.path.join(OUTPUT_DIR, f'partial_index_{partial_count}.bin')
@@ -204,7 +228,12 @@ def merge_partial_indexes(doc_count):
 
     current_term = None
     merged_postings = []
+    
+    pagerank_file = os.path.join(OUTPUT_DIR, 'page_rank_scores.pkl')
+    with open(pagerank_file, 'rb') as file:
+        page_rank_scores = pickle.load(file)
 
+    
     while heap:
         term, postings, rid = heapq.heappop(heap)
         if current_term is None:
@@ -217,7 +246,8 @@ def merge_partial_indexes(doc_count):
             df = len(set(p[0] for p in merged_postings))
             idf = math.log(doc_count / df)
             merged_postings.sort(key=lambda x: x[0])
-            final_postings = [(doc_id, count * idf) for doc_id, count in merged_postings]
+            # Add PageRank to final Postings
+            final_postings = [(doc_id, count * idf + page_rank_scores[doc_id]) for doc_id, count in merged_postings]
 
             out_f = get_file_handle(current_term)
             term_enc = current_term.encode('utf-8')
@@ -291,11 +321,14 @@ def main():
     # Structure: {target_url: [list of anchor tokens]}
     anchor_text_map = defaultdict(list)
 
+    adjacency_matrix = defaultdict(list)
+    
     for fp in file_paths:
-        url, freq, anchor_map_for_this_doc = process_document(fp, doc_id)
+        url, freq, anchor_map_for_this_doc, adjacency_list = process_document(fp, doc_id)
         if freq is None:
             continue
         doc_id_map.append(url)
+        
 
         for term, count in freq.items():
             iIndex[term].append(Posting(doc_id, count))
@@ -305,6 +338,9 @@ def main():
         for target_url, tokens in anchor_map_for_this_doc.items():
             anchor_text_map[target_url].extend(tokens)
 
+        for adj_url in adjacency_list:
+            adjacency_matrix[doc_id].append(adj_url)
+        
         doc_id += 1
 
         # Write partial index periodically if large
@@ -314,6 +350,17 @@ def main():
     # Write last partial index if any
     if iIndex:
         write_partial_index(iIndex, doc_id_map, doc_id // PARTIAL_INDEX_SIZE)
+
+    reverse_map = {element: index for index, element in enumerate(doc_id_map)}
+    adjacency_matrix = {key: [reverse_map[val] for val in values if val in reverse_map] for key, values in adjacency_matrix.items()}
+
+    page_rank_scores = page_rank(adjacency_matrix)
+
+    pagerank_file = os.path.join(OUTPUT_DIR, 'page_rank_scores.pkl')
+    with open(pagerank_file, 'wb') as f:
+        pickle.dump(page_rank_scores, f)
+
+    doc_count = len(doc_id_map)
 
     docmap_file = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
     with open(docmap_file, 'wb') as f:
