@@ -230,8 +230,6 @@ def merge_partial_indexes(doc_count):
     merged_postings = []
     
     pagerank_file = os.path.join(OUTPUT_DIR, 'page_rank_scores.pkl')
-    with open(pagerank_file, 'rb') as file:
-        page_rank_scores = pickle.load(file)
 
     
     while heap:
@@ -247,7 +245,10 @@ def merge_partial_indexes(doc_count):
             idf = math.log(doc_count / df)
             merged_postings.sort(key=lambda x: x[0])
             # Add PageRank to final Postings
-            final_postings = [(doc_id, count * idf + page_rank_scores[doc_id]) for doc_id, count in merged_postings]
+
+            with open(pagerank_file, 'rb') as file:
+                page_rank_scores = pickle.load(file)
+            final_postings = [(doc_id, count * idf + page_rank_scores.get(doc_id, 0)) for doc_id, count in merged_postings]
 
             out_f = get_file_handle(current_term)
             term_enc = current_term.encode('utf-8')
@@ -274,8 +275,8 @@ def merge_partial_indexes(doc_count):
         df = len(set(p[0] for p in merged_postings))
         idf = math.log(doc_count / df)
         merged_postings.sort(key=lambda x: x[0])
-        final_postings = [(doc_id, count * idf) for doc_id, count in merged_postings]
-
+        #final_postings = [(doc_id, count * idf) for doc_id, count in merged_postings]
+        final_postings = [(doc_id, count * idf + page_rank_scores.get(doc_id, 0)) for doc_id, count in merged_postings]
         out_f = get_file_handle(current_term)
         term_enc = current_term.encode('utf-8')
         out_f_start = out_f.tell()
@@ -395,6 +396,7 @@ def main():
     end_time = time.time()
     elapsed = end_time - start_time
     print(f"Indexing complete in {elapsed:.2f} seconds.")
+
 
 if __name__ == '__main__':
     main()

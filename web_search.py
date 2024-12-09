@@ -4,6 +4,7 @@ import struct
 import string
 from flask import Flask, request, render_template_string
 from nltk.stem.porter import PorterStemmer
+import time
 
 # Configuration
 OUTPUT_DIR = 'index_files'
@@ -220,6 +221,7 @@ app = Flask(__name__)
 def search_page():
     query = request.args.get('q', '')
     results_display = []
+    start_time = time.time()
     if query.strip():
         tokens = tokenize_query(query)
         results = query_and(tokens)
@@ -229,6 +231,10 @@ def search_page():
                 results_display.append((url, score))
         else:
             results_display = []
+                
+    end_time = time.time()
+    elapsed = end_time - start_time
+    print(f"Query complete in {elapsed:.4f} seconds.")
     return render_template_string(HTML_TEMPLATE, query=query, results=results_display)
 
 if __name__ == "__main__":
