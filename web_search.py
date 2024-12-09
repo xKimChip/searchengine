@@ -7,7 +7,7 @@ from nltk.stem.porter import PorterStemmer
 import time
 
 # Configuration
-OUTPUT_DIR = 'index_files'
+OUTPUT_DIR = 'index_files2'
 DOCMAP_FILE = os.path.join(OUTPUT_DIR, 'doc_id_map.pkl')
 
 # Load doc_id_map
